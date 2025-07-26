@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import NextAuth from "next-auth";
-
+import { SettingsIcon } from "../../public/icons/settings";
 
 declare module "next-auth" {
   interface Session {
@@ -18,13 +18,12 @@ declare module "next-auth" {
     };
   }
 }
+
 interface Room {
   id: string;
   name: string;
   password?: string;
-  // add other fields as needed (e.g., adminId?)
 }
-
 
 export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [open, setOpen] = useState(false);
@@ -32,73 +31,74 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomDropdownOpen, setRoomDropdownOpen] = useState<string | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
 
   const handleCreate = async () => {
     try {
       const response = await axios.post("/user/createroom", {
-        name: name,
-        password: password,
+        name,
+        password,
         adminId: user.id,
       });
       const newRoom = response.data.room;
       setRooms((prev) => [...prev, newRoom]);
-      console.log("Room created:", response.data);
-      // Clear form and close modal if needed
       setName("");
       setPassword("");
       setWorkspaces(false);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      console.log("error");
+      console.error("Error creating room:", error);
     }
   };
+
+  const handleDeleteRoom = async (roomId: string) => {
+    try {
+      await axios.delete(`/user/deleteroom?id=${roomId}`);
+      setRooms((prev) => prev.filter((room) => room.id !== roomId));
+      setRoomDropdownOpen(null);
+    } catch (error) {
+      console.error("Failed to delete room:", error);
+    }
+  };
+
+  const handleCopyRoomURL = (roomId: string) => {
+    const roomShareId = roomId;
+    navigator.clipboard.writeText(roomShareId);
+    alert("Workspace URL copied!");
+    setRoomDropdownOpen(null);
+  };
+
   useEffect(() => {
     const fetchRooms = async () => {
       const res = await axios.get(`/user/getrooms?id=${user.id}`);
-      setRooms(res.data.rooms); // depends on your route
+      setRooms(res.data.rooms);
     };
-
     fetchRooms();
   }, [user.id]);
 
-
-
-  // Close profile dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setOpen(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Close workspace card
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        workspaceRef.current &&
-        !workspaceRef.current.contains(event.target as Node)
-      ) {
+      if (workspaceRef.current && !workspaceRef.current.contains(event.target as Node)) {
         setWorkspaces(false);
       }
     };
-
     if (workspaces) {
       document.addEventListener("mousedown", handleClickOutside);
     }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [workspaces]);
 
   return (
@@ -141,10 +141,11 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
         </div>
       </div>
 
-      <div className="h-screen">
+      <div className="h-screen pl-4">
         <div className="text-3xl text-gray-650 font-bold italic ml-4 mt-4">
           Dashboard
         </div>
+
         <div className="flex items-center mt-6">
           <div className="ml-4 text-2xl">Your workspaces</div>
           <div className="translate-y-2 translate-x-60 relative">
@@ -216,18 +217,64 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-6 p-4 mt-4">
+
+        <div className="flex flex-wrap gap-6 p-4 mt-8">
           {rooms.map((room) => (
             <div
               key={room.id}
-              className="w-64 h-32 bg-gray-100 p-4 rounded shadow cursor-pointer hover:bg-gray-200"
-              onClick={() => {}}
+              className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200 relative"
             >
-              <h3 className="text-xl font-semibold">{room.name}</h3>
+              <div className="flex justify-end">
+                <div className="relative">
+                  <div
+                    className="cursor-pointer"
+                    onClick={() =>
+                      setRoomDropdownOpen((prev) =>
+                        prev === room.id ? null : room.id
+                      )
+                    }
+                  >
+                    <SettingsIcon />
+                  </div>
+
+                  {roomDropdownOpen === room.id && (
+                    <div className="absolute right-0 top-8 mt-1 w-40 bg-white shadow-lg rounded-md z-50 border">
+                      <ul className="py-2 text-sm text-gray-700">
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                            onClick={() => handleDeleteRoom(room.id)}
+                          >
+                            Delete Workspace
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                            onClick={() => handleCopyRoomURL(room.id)}
+                          >
+                            Copy Workspace URL
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                            onClick={() => handleCopyRoomURL(room.password || "")}
+                          >
+                            Copy Workspace password
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <h3 className="mx-auto mt-4 text-xl font-semibold text-center">
+                {room.name}
+              </h3>
             </div>
           ))}
         </div>
-
       </div>
     </div>
   );
