@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -56,9 +50,11 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
-  drawings      Drawing[]
-  collaborations Collaboration[]
-
+  // drawings      Drawing[]
+  // collaborations Collaboration[]
+  rooms       RoomUser[]   // Rooms this user is part of
+  ownedRooms  Room[]       @relation("RoomAdmins")
+  chats       Chat[]       @relation("SentMessages")
   @@map("users")
 }
 
@@ -72,35 +68,74 @@ model VerificationToken {
 }
 
 // Your app-specific models
-model Drawing {
-  id          String   @id @default(cuid())
-  title       String
-  data        Json     @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  creatorId   String   @map("creator_id")
-  isPublic    Boolean  @default(false) @map("is_public")
-  
-  creator       User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  collaborators Collaboration[]
+// model Drawing {
+//   id          String   @id @default(cuid())
+//   title       String
+//   data        Json     @default("{}")
+//   createdAt   DateTime @default(now()) @map("created_at")
+//   updatedAt   DateTime @updatedAt @map("updated_at")// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-  @@map("drawings")
-}
-enum CollaborationRole {
-  VIEWER
-  EDITOR
-  ADMIN
-}
-model Collaboration {
-  id        String            @id @default(cuid())
-  drawingId String            @map("drawing_id")
-  userId    String            @map("user_id")
-  role      CollaborationRole @default(VIEWER)
-  createdAt DateTime          @default(now()) @map("created_at")
-  
-  drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
-  @@unique([drawingId, userId])
-  @@map("collaborations")
+//   creatorId   String   @map("creator_id")
+//   isPublic    Boolean  @default(false) @map("is_public")
+  
+//   creator       User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+//   collaborators Collaboration[]
+
+//   @@map("drawings")
+// }
+// enum CollaborationRole {
+//   VIEWER
+//   EDITOR
+//   ADMIN
+// }
+// model Collaboration {
+//   id        String            @id @default(cuid())
+//   drawingId String            @map("drawing_id")
+//   userId    String            @map("user_id")
+//   role      CollaborationRole @default(VIEWER)
+//   createdAt DateTime          @default(now()) @map("created_at")
+  
+//   drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+//   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@unique([drawingId, userId])
+//   @@map("collaborations")
+// }
+
+model Room {
+  id          String       @id @default(cuid())
+  name        String
+  password    String?
+  adminId     String
+  admin       User         @relation("RoomAdmins", fields: [adminId], references: [id])
+
+  users       RoomUser[]   // Users in the room
+  chats       Chat[]
+}
+
+model RoomUser {
+  id        String   @id @default(cuid())
+  userId    String
+  roomId    String
+
+  user      User     @relation(fields: [userId], references: [id])
+  room      Room     @relation(fields: [roomId], references: [id])
+
+  @@unique([userId, roomId]) // Prevent duplicates
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  message   String
+  time      DateTime @default(now())
+
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
 }
