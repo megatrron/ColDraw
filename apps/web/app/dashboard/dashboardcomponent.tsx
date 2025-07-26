@@ -222,10 +222,10 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
           {rooms.map((room) => (
             <div
               key={room.id}
-              className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200 relative"
+              className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200"
             >
               <div className="flex justify-end">
-                <div className="relative">
+                <div className="">
                   <div
                     className="cursor-pointer"
                     onClick={() =>
