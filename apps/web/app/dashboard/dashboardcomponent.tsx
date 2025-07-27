@@ -29,11 +29,15 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [workspaces, setWorkspaces] = useState(false);
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [joinname, setJoinName] = useState("");
+  const [joinpassword, setJoinPassword] = useState("");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomDropdownOpen, setRoomDropdownOpen] = useState<string | null>(null);
+  const [joinWorkspace, setJoinWorkspace] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const joinworkspaceRef = useRef<HTMLDivElement | null>(null);
 
   const handleCreate = async () => {
     try {
@@ -51,6 +55,9 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
       console.error("Error creating room:", error);
     }
   };
+  const handleJoin = () => {
+    // Join workspace logic here
+  }
 
   const handleDeleteRoom = async (roomId: string) => {
     try {
@@ -63,7 +70,7 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   };
 
   const handleCopyRoomURL = (roomId: string) => {
-    const url = `${window.location.origin}/join/${roomId}`;
+    const url = roomId;
     navigator.clipboard.writeText(url);
     alert("Workspace URL copied!");
     setRoomDropdownOpen(null);
@@ -206,9 +213,60 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                 </div>
               </div>
             )}
-            <button className="mx-4 cursor-pointer rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none border border-gray-300 text-gray-800 hover:bg-gray-100 px-4 py-2 text-base">
+            <button onClick={() => setJoinWorkspace((prev) => !prev)}
+            className="mx-4 cursor-pointer rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none border border-gray-300 text-gray-800 hover:bg-gray-100 px-4 py-2 text-base">
               Join Workspace
             </button>
+            {joinWorkspace && (
+              <div
+                ref={joinworkspaceRef}
+                className="absolute top-14 left-0 w-96 bg-white shadow-lg rounded-xl p-6 border border-gray-200 z-50"
+              >
+                <h2 className="text-lg font-semibold mb-4">Join a Workspace</h2>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Workspace Id
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter workspace id"
+                    value={joinname}
+                    onChange={(e) => setJoinName(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md p-2"
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Workspace Password (optional)
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Enter password"
+                    value={joinpassword}
+                    onChange={(e) => setJoinPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md p-2"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleJoin}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                  >
+                    Join
+                  </button>
+                  <button
+                    onClick={() => {
+                      setJoinName("");
+                      setJoinPassword("");
+                      setJoinWorkspace(false);
+                    }}
+                    className="border px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
