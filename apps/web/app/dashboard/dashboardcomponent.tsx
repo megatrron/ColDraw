@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { SettingsIcon } from "../../public/icons/settings";
-
+import { useRouter } from "next/navigation";
 declare module "next-auth" {
   interface Session {
     user: {
@@ -34,6 +34,9 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomDropdownOpen, setRoomDropdownOpen] = useState<string | null>(null);
   const [joinWorkspace, setJoinWorkspace] = useState(false);
+  const [joinRoomId, setJoinRoomId] = useState<string | null>(null);
+  const [joinRoomPassword, setJoinRoomPassword] = useState<string | null>(null);
+  const router = useRouter();
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
@@ -55,8 +58,28 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
       console.error("Error creating room:", error);
     }
   };
-  const handleJoin = () => {
-    // Join workspace logic here
+  const handleJoin = async (id: string, pass: string) => {
+    setJoinRoomId(id);
+    setJoinRoomPassword(pass);
+    try {
+      console.log("Joining room with ID:", id, "and password:", pass);
+      console.log("Joining room with ID:", joinRoomId, "and password:", joinRoomPassword);
+      const res = await axios.post("/user/joinroom", {
+        roomId: id,
+        password: pass
+      });
+      setJoinRoomId(null);
+      setJoinRoomPassword(null);
+      
+      if (res.status === 200) {
+        router.push(`/room/${id}`);
+      }
+    } catch (error) {
+      alert("Invalid room or password.");
+    }
+  };
+  const handleJoinAsAdmin = () => {
+    // Join workspace as admin logic here
   }
 
   const handleDeleteRoom = async (roomId: string) => {
@@ -249,7 +272,7 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                 </div>
                 <div className="flex justify-end gap-2">
                   <button
-                    onClick={handleJoin}
+                    onClick={() => handleJoin(joinname, joinpassword)}
                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
                   >
                     Join
@@ -275,6 +298,9 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
             <div
               key={room.id}
               className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200 relative z-10"
+              onClick={() => {
+                handleJoin(room.id, room.password || "");
+              }}
             >
               <div className="flex justify-end">
                 <div className="relative z-20">
