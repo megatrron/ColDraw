@@ -1,24 +1,33 @@
 "use client";
+
 import axios from "axios";
 import { Session } from "next-auth";
 import { useParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-
+import "js-draw/styles";
+import dynamic from "next/dynamic";
 type ChatMessage = {
   senderId: string;
   message: string;
   roomId: string;
 };
+const DrawingEditor = dynamic(() => import('./drawingeditor'), {
+  ssr: false, // Disable SSR
+});
 
 export default function RoomComponent({ user }: { user: Session["user"] }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // const containerRef = useRef<HTMLDivElement>(null);
+  // const editorRef = useRef<HTMLDivElement>(null);
   const params = useParams();
-  // Simulate fetching the latest 10 messages (you'll replace this with real data)
+  // Fetch chat messages when opened
   useEffect(() => {
     const roomId = params.roomId as string;
+    if (!chatOpen || !roomId) return;
+
     const fetchMessages = async () => {
       try {
         const response = await axios.get(`/room/chats?limit=10&roomId=${roomId}`);
@@ -27,16 +36,13 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
         console.error("Error fetching messages:", error);
       }
     };
-    if (chatOpen) {
-      fetchMessages();
-    }
+
+    fetchMessages();
   }, [chatOpen, params.roomId]);
 
-  // Scroll to bottom when messages update
+  // Auto-scroll chat
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const handleSend = () => {
@@ -47,24 +53,30 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
       message: inputMessage,
       roomId: params.roomId as string,
     };
-    const sendMessage = async () => {
-      try {
-        await axios.post("/room/sendmessage", newMessage);
-      } catch (error) {
-        console.error("Error sending message:", error);
-      }
-    };
-    sendMessage();
 
+    axios.post("/room/sendmessage", newMessage).catch(console.error);
     setMessages((prev) => [...prev, newMessage]);
     setInputMessage("");
   };
 
   return (
-    <div className="relative h-screen">
-      {/* Chat Icon */}
+    <div>
+      <DrawingEditor />
+      {/* Whiteboard */}
+      {/* <div
+        ref={editorRef}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+        }}
+      ></div> */}
+
+      {/* Chat Toggle Button */}
       <div
-        className="rounded-full text-white bg-black p-2 pl-3 cursor-pointer w-10 m-2 z-50"
+        className="fixed top-4 left-4 z-50 rounded-full text-white bg-black p-2 w-10 h-10 flex items-center justify-center cursor-pointer"
         onClick={() => setChatOpen(true)}
       >
         C
@@ -78,19 +90,16 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
         />
       )}
 
-      {/* Sidebar Chat Window */}
+      {/* Chat Sidebar */}
       <div
-        className={`
-          fixed top-0 left-0 h-full w-80 bg-white shadow-lg z-50
-          transform transition-transform duration-300 ease-in-out flex flex-col
-          ${chatOpen ? "translate-x-0" : "-translate-x-full"}
-        `}
+        className={`fixed top-0 left-0 h-full w-80 bg-white shadow-lg z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${chatOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="p-4 font-bold border-b">Chat Window</div>
 
-        {/* Chat Messages */}
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-2">
           <div className="flex flex-col justify-end space-y-2 min-h-full">
             {messages.map((msg, index) => (
@@ -102,8 +111,7 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
           </div>
         </div>
 
-
-        {/* Input Box */}
+        {/* Input */}
         <div className="border-t p-2 flex items-center">
           <input
             type="text"
