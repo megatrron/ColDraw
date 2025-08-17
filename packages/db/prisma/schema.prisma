@@ -115,6 +115,7 @@ model Room {
 
   users       RoomUser[]   // Users in the room
   chats       Chat[]
+  drawings    RoomDrawing[] // Drawings in the room
 }
 
 model RoomUser {
@@ -137,5 +138,44 @@ model Chat {
   sender    User     @relation("SentMessages", fields: [senderId], references: [id])
 
   roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
+}
+
+// prisma/schema.prisma
+// model Drawing {
+//   id        String   @id @default(cuid())
+//   roomId    String
+//   createdBy String
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//   strokes   Stroke[]
+
+//   @@index([roomId])
+// }
+
+// model Stroke {
+//   id         String    @id @default(cuid())
+//   drawingId  String
+//   strokeId   String    @unique
+//   userId     String
+//   order      Int
+//   strokeData Json
+//   createdAt  DateTime  @default(now())
+//   deletedAt  DateTime?
+
+//   drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+
+//   @@index([drawingId, order])
+//   @@index([strokeId])
+// }
+
+// Prisma Schema
+model RoomDrawing {
+  id          String   @id @default(cuid())
+  roomId      String   @unique
+  strokeData  Json     @default("[]")  // Array of strokes
+  lastUpdated DateTime @default(now()) @updatedAt
+  createdAt   DateTime @default(now())
+
   room      Room     @relation(fields: [roomId], references: [id])
 }

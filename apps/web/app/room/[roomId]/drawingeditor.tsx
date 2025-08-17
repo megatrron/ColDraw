@@ -1,11 +1,14 @@
+"use client";
 // import dynamic from 'next/dynamic';
 import { useEffect, useRef } from 'react';
-import Editor from 'js-draw';
+import { Editor, EditorEventType, invertCommand, SerializableCommand } from 'js-draw';
+import axios from 'axios';
+import { useParams } from 'next/navigation';
 
 export default function DrawingBoard() {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorInstance = useRef<Editor | null>(null);
-
+  const params = useParams();
   useEffect(() => {
     // Prevent double init (StrictMode fix in dev)
     if (editorInstance.current) return;
@@ -38,6 +41,89 @@ export default function DrawingBoard() {
 
       window.addEventListener('resize', handleResize);
 
+      let strokeStorage: any[] = [];
+      let hasChanged = false;
+
+      // Fetch and apply strokes on mount
+      (async () => {
+        try {
+          const response = await axios.get('/api/room/strokes', {
+            params: { roomId: params.roomId },
+          });
+          const strokesFromDB = response.data.strokeData;
+          if (Array.isArray(strokesFromDB)) {
+            strokeStorage = strokesFromDB;
+            strokesFromDB.forEach((x) => {
+              const command = SerializableCommand.deserialize(x, editor);
+              command.apply(editor);
+            });
+          }
+        } catch (err) {
+          console.error("Failed to load strokes:", err);
+        }
+      })();
+
+      const applySerializedCommand = (serializedCommand: any) => {
+        // broadcast the command to all connected clients
+      };
+      const applyCommandsToOthers = (sourceEditor: Editor) => {
+        sourceEditor.notifier.on(EditorEventType.CommandDone, (evt) => {
+          console.log('Command done:', evt);
+          console.log(strokeStorage);
+          if (evt.kind !== EditorEventType.CommandDone) {
+            throw new Error('Incorrect event type');
+          }
+
+          if (evt.command instanceof SerializableCommand) {
+            const serializedCommand = evt.command.serialize();
+            strokeStorage.push(serializedCommand);
+            hasChanged = true; // Mark as changed
+            applySerializedCommand(serializedCommand);
+          } else {
+            console.log('Nonserializable command');
+          }
+        });
+        sourceEditor.notifier.on(EditorEventType.CommandUndone, (evt) => {
+          // Type assertion.
+          if (evt.kind !== EditorEventType.CommandUndone) {
+            throw new Error('Incorrect event type');
+          }
+
+          if (evt.command instanceof SerializableCommand) {
+            const serializedCommand = invertCommand(evt.command).serialize();
+            strokeStorage = strokeStorage.filter((c) => c.id !== serializedCommand.id);
+            hasChanged = true; // Mark as changed
+            applySerializedCommand(serializedCommand);
+          } else {
+            console.log('Nonserializable command');
+          }
+        });
+      };
+      applyCommandsToOthers(editor);
+      setInterval(async () => {
+        if (hasChanged) {
+          try {
+            const response = await axios.put('/api/room/strokes', {
+              strokeData: strokeStorage,
+              roomId: params.roomId,
+            });
+            console.log('Full API response:', response.data);
+            const strokesFromDB = response.data.strokeData;
+            if (Array.isArray(strokesFromDB)) {
+              strokeStorage = strokesFromDB;
+              strokeStorage.forEach((x) => {
+                const command = SerializableCommand.deserialize(x, editor);
+                command.apply(editor);
+              });
+              hasChanged = false; // Reset flag after successful save
+            } else {
+              console.warn("Server did not return strokes array:", response.data);
+            }
+          } catch (err) {
+            console.error("API error:", err);
+          }
+        }
+      }, 5000);
       return () => {
         window.removeEventListener('resize', handleResize);
         if (editorRef.current) {
@@ -47,6 +133,10 @@ export default function DrawingBoard() {
       };
     }
   }, []);
+
+  useEffect(() => {
+
+  }, [])
 
   return <div ref={editorRef}></div>;
 }
