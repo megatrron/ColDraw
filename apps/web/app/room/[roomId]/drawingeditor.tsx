@@ -5,14 +5,14 @@ import { Editor, EditorEventType, invertCommand, SerializableCommand } from 'js-
 import axios from 'axios';
 import { useParams } from 'next/navigation';
 
-export default function DrawingBoard() {
+export default function DrawingBoard(userId: any) {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorInstance = useRef<Editor | null>(null);
   const params = useParams();
   useEffect(() => {
     // Prevent double init (StrictMode fix in dev)
     if (editorInstance.current) return;
-
+    const ws = new WebSocket("ws://localhost:8080");
     if (editorRef.current) {
       // Set full-screen dimensions before initializing
       editorRef.current.style.position = 'fixed';
@@ -47,6 +47,17 @@ export default function DrawingBoard() {
       // Fetch and apply strokes on mount
       (async () => {
         try {
+          ws.onopen = () => {
+            ws.send(
+              JSON.stringify({
+                type: "join",
+                payload: {
+                  "roomId": params.roomId,
+                  "userId": userId
+                }
+              })
+            )
+          }
           const response = await axios.get('/api/room/strokes', {
             params: { roomId: params.roomId },
           });
@@ -64,7 +75,31 @@ export default function DrawingBoard() {
       })();
 
       const applySerializedCommand = (serializedCommand: any) => {
-        // broadcast the command to all connected clients
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "stroke",
+              payload: {
+                "roomId": params.roomId,
+                "userId": userId,
+                "message": serializedCommand
+              }
+            })
+          );
+        } else {
+          ws.addEventListener('open', () => {
+            ws.send(
+              JSON.stringify({
+                type: "stroke",
+                payload: {
+                  "roomId": params.roomId,
+                  "userId": userId,
+                  "message": serializedCommand
+                }
+              })
+            );
+          }, { once: true });
+        }
       };
       const applyCommandsToOthers = (sourceEditor: Editor) => {
         sourceEditor.notifier.on(EditorEventType.CommandDone, (evt) => {
@@ -124,6 +159,11 @@ export default function DrawingBoard() {
           }
         }
       }, 5000);
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        const command = SerializableCommand.deserialize(msg.message, editor);
+        command.apply(editor);
+      }
       return () => {
         window.removeEventListener('resize', handleResize);
         if (editorRef.current) {

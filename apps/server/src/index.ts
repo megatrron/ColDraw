@@ -22,12 +22,20 @@ wss.on("connection", (socket) => {
     }
 
     if (parsedMessage.type == "chat") {
-      console.log("user wants to chat");
       //@ts-ignore
       const currentUserRoom = allSockets.find((x) => x.socket == socket).room;
       allSockets.forEach((socketObj) => {
         if (socketObj.room === currentUserRoom) {
           socketObj.socket.send(parsedMessage.payload.message);
+        }
+      });
+    }
+    if (parsedMessage.type == "stroke") {
+      //@ts-ignore
+      const currentUserRoom = allSockets.find((x) => x.socket == socket).room;
+      allSockets.forEach((socketObj) => {
+        if (socketObj.room === currentUserRoom) {
+          socketObj.socket.send(JSON.stringify(parsedMessage.payload));
         }
       });
     }

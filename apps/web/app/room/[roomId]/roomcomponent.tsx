@@ -61,7 +61,7 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
 
   return (
     <div>
-      <DrawingEditor />
+      <DrawingEditor user = {user.id}/>
       {/* Whiteboard */}
       {/* <div
         ref={editorRef}
