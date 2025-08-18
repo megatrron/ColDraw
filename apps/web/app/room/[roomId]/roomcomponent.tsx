@@ -76,7 +76,7 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
 
       {/* Chat Toggle Button */}
       <div
-        className="fixed top-4 left-4 z-50 rounded-full text-white bg-black p-2 w-10 h-10 flex items-center justify-center cursor-pointer"
+        className="fixed top-4 left-4 z-50 mt-8 rounded-full text-white bg-black p-2 w-10 h-10 flex items-center justify-center cursor-pointer"
         onClick={() => setChatOpen(true)}
       >
         C
