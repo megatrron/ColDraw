@@ -9,6 +9,6 @@ export default async function Room() {
     redirect("/auth/login");
   }
   return <div>
-    <RoomComponent user={session.user} />
+    <RoomComponent session={session} />
   </div>;
 }

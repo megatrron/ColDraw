@@ -5,7 +5,9 @@ import { Session } from "next-auth";
 import { useParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import "js-draw/styles";
+import JaasVoiceControls from "./voiceControls";
 import dynamic from "next/dynamic";
+import JitsiEmbed from "./voiceControls";
 type ChatMessage = {
   senderId: string;
   message: string;
@@ -14,8 +16,14 @@ type ChatMessage = {
 const DrawingEditor = dynamic(() => import('./drawingeditor'), {
   ssr: false, // Disable SSR
 });
-
-export default function RoomComponent({ user }: { user: Session["user"] }) {
+export default function RoomAuth({ session }: { session: any }) {
+  if (session.status === 'loading') return <div>Loading...</div>;
+  if (session.status === 'unauthenticated') return <div>Redirecting...</div>;
+  return (
+    <RoomComponent session={session} />
+  );
+}
+function RoomComponent({ session }: { session: any }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -49,7 +57,7 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
     if (inputMessage.trim() === "") return;
 
     const newMessage: ChatMessage = {
-      senderId: user.id,
+      senderId: session.user.id,
       message: inputMessage,
       roomId: params.roomId as string,
     };
@@ -61,7 +69,7 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
 
   return (
     <div>
-      <DrawingEditor user = {user.id}/>
+      <DrawingEditor user={session.user.id} />
       {/* Whiteboard */}
       {/* <div
         ref={editorRef}
@@ -81,7 +89,9 @@ export default function RoomComponent({ user }: { user: Session["user"] }) {
       >
         C
       </div>
-
+      <div className="absolute top-4 right-4 flex gap-2 z-10">
+        <JitsiEmbed session={session} />
+      </div>
       {/* Overlay */}
       {chatOpen && (
         <div
