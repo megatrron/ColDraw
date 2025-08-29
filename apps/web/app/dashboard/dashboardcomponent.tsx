@@ -70,7 +70,7 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
       });
       setJoinRoomId(null);
       setJoinRoomPassword(null);
-      
+
       if (res.status === 200) {
         router.push(`/room/${id}`);
       }
@@ -237,7 +237,7 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
               </div>
             )}
             <button onClick={() => setJoinWorkspace((prev) => !prev)}
-            className="mx-4 cursor-pointer rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none border border-gray-300 text-gray-800 hover:bg-gray-100 px-4 py-2 text-base">
+              className="mx-4 cursor-pointer rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none border border-gray-300 text-gray-800 hover:bg-gray-100 px-4 py-2 text-base">
               Join Workspace
             </button>
             {joinWorkspace && (
@@ -298,9 +298,7 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
             <div
               key={room.id}
               className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200 relative z-10"
-              onClick={() => {
-                handleJoin(room.id, room.password || "");
-              }}
+
             >
               <div className="flex justify-end">
                 <div className="relative z-20">
@@ -312,7 +310,6 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                   >
                     <SettingsIcon />
                   </div>
-
                   {roomDropdownOpen === room.id && (
                     <div className="absolute right-0 top-8 mt-1 w-40 bg-white shadow-lg rounded-md z-50 border">
                       <ul className="py-2 text-sm text-gray-700">
@@ -347,9 +344,13 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                   )}
                 </div>
               </div>
-              <h3 className="mx-auto mt-4 text-xl font-semibold text-center">
-                {room.name}
-              </h3>
+              <div className="cursor-pointer" onClick={() => {
+                handleJoin(room.id, room.password || "");
+              }}>
+                <h3 className="mx-auto mt-4 text-xl font-semibold text-center">
+                  {room.name}
+                </h3>
+              </div>
             </div>
           ))}
         </div>
