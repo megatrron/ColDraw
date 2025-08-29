@@ -165,7 +165,7 @@ export default function DrawingBoard(userId: any) {
         command.apply(editor);
       }
       return () => {
-        window.removeEventListener('resize', handleResize);
+        // window.removeEventListener('resize', handleResize);
         if (editorRef.current) {
           // eslint-disable-next-line react-hooks/exhaustive-deps
           editorRef.current.innerHTML = '';
@@ -174,9 +174,6 @@ export default function DrawingBoard(userId: any) {
     }
   }, []);
 
-  useEffect(() => {
-
-  }, [])
 
   return <div ref={editorRef}></div>;
 }
