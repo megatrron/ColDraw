@@ -1,12 +1,12 @@
 import { WebSocketServer, WebSocket } from "ws";
-
+import { startWsServer } from "./anotherserver";
 const wss = new WebSocketServer({ port: 8080 });
 
 interface User {
   socket: WebSocket;
   room: string;
 }
-
+startWsServer(3001);
 let allSockets: User[] = [];
 
 wss.on("connection", (socket) => {

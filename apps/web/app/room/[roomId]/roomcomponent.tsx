@@ -28,6 +28,7 @@ function RoomComponent({ session }: { session: any }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   // const containerRef = useRef<HTMLDivElement>(null);
   // const editorRef = useRef<HTMLDivElement>(null);
   const params = useParams();
@@ -47,14 +48,62 @@ function RoomComponent({ session }: { session: any }) {
 
     fetchMessages();
   }, [chatOpen, params.roomId]);
+  useEffect(() => {
+    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL as string);
+    wsRef.current = ws;
 
+    ws.onopen = () => {
+      console.log("Connected to WS server");
+
+      // Join room after connect
+      ws.send(
+        JSON.stringify({
+          type: "join",
+          payload: { roomId: params.roomId },
+        })
+      );
+    };
+
+    ws.onmessage = (event) => {
+      // server sends plain message string for chat
+
+      const parsed = JSON.parse(event.data);
+      // This could be a stroke or something else
+      if (parsed.message && parsed.roomId) {
+        setMessages((prev) => [...prev, parsed]);
+      } else {
+        // handle stroke or other payloads
+        console.log("Stroke or custom:", parsed);
+      }
+
+    };
+
+    ws.onclose = () => console.log("Disconnected from WS server");
+
+    return () => {
+      ws.close();
+    };
+  }, [params.roomId]);
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // const handleSend = () => {
+  //   if (inputMessage.trim() === "") return;
+
+  //   const newMessage: ChatMessage = {
+  //     senderId: session.user.id,
+  //     message: inputMessage,
+  //     roomId: params.roomId as string,
+  //   };
+
+    // axios.post("/room/sendmessage", newMessage).catch(console.error);
+  //   setMessages((prev) => [...prev, newMessage]);
+  //   setInputMessage("");
+  // };
   const handleSend = () => {
-    if (inputMessage.trim() === "") return;
+    if (!inputMessage.trim()) return;
 
     const newMessage: ChatMessage = {
       senderId: session.user.id,
@@ -62,8 +111,14 @@ function RoomComponent({ session }: { session: any }) {
       roomId: params.roomId as string,
     };
 
+    wsRef.current?.send(
+      JSON.stringify({
+        type: "chat",
+        payload: { message: JSON.stringify(newMessage) },
+      })
+    );
     axios.post("/room/sendmessage", newMessage).catch(console.error);
-    setMessages((prev) => [...prev, newMessage]);
+
     setInputMessage("");
   };
 
