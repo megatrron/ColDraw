@@ -27,34 +27,38 @@ export const authOptions: NextAuthOptions = {
           const existingUser = await prisma.user.findUnique({
             where: { email },
           });
-          if (existingUser?.password) {
+
+          // Existing user with credentials flow
+          if (existingUser && existingUser.password) {
             const isValid = await compare(password, existingUser.password);
             if (!isValid) return null;
-
             return {
               id: existingUser.id,
               name: existingUser.name,
               email: existingUser.email,
             };
           }
-        } catch {
-          // Sign-up fallback (optional, use with caution)
+
+          // Prevent logging in with credentials for OAuth-only accounts
+          if (existingUser && !existingUser.password) {
+            return null;
+          }
+
+          // Create a new user (sign-up) when no user exists yet
           const hashedPassword = await hash(password, 10);
           const newUser = await prisma.user.create({
             data: {
               email,
-              name: name || email.split("@")[0],
+              name:
+                name ||
+                (typeof email === "string" ? email.split("@")[0] : "User"),
               password: hashedPassword,
             },
           });
-
-          return {
-            id: newUser.id,
-            name: newUser.name,
-            email: newUser.email,
-          };
+          return { id: newUser.id, name: newUser.name, email: newUser.email };
+        } catch {
+          return null;
         }
-        return null;
       },
     }),
   ],
@@ -79,4 +83,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/login",
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
