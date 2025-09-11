@@ -25,10 +25,23 @@ export async function GET(request: NextRequest) {
         time: "desc", // Get latest chats first
       },
       take: 10, // Only get 10
+      include: {
+        sender: {
+          select: { name: true },
+        },
+      },
     });
     chats.reverse(); // Reverse to show oldest first
+    const shaped = chats.map((c) => ({
+      id: c.id,
+      message: c.message,
+      time: c.time,
+      senderId: c.senderId,
+      senderName: c.sender?.name ?? null,
+      roomId: c.roomId,
+    }));
 
-    return new Response(JSON.stringify({ chats }), {
+    return new Response(JSON.stringify({ chats: shaped }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

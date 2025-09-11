@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import JitsiEmbed from "./voiceControls";
 type ChatMessage = {
   senderId: string;
+  senderName?: string | null;
   message: string;
   roomId: string;
 };
@@ -107,6 +108,7 @@ function RoomComponent({ session }: { session: any }) {
 
     const newMessage: ChatMessage = {
       senderId: session.user.id,
+      senderName: session.user.name ?? null,
       message: inputMessage,
       roomId: params.roomId as string,
     };
@@ -169,7 +171,8 @@ function RoomComponent({ session }: { session: any }) {
           <div className="flex flex-col justify-end space-y-2 min-h-full">
             {messages.map((msg, index) => (
               <div key={index} className="bg-gray-200 p-2 rounded text-sm">
-                {msg.message}
+                <div className="text-[10px] text-gray-600 mb-1">{msg.senderName || "Unknown"}</div>
+                <div>{msg.message}</div>
               </div>
             ))}
             <div ref={chatEndRef} />
