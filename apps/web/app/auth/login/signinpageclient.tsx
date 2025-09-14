@@ -2,7 +2,16 @@
 "use client";
 import { signIn } from "next-auth/react";
 
-export default function SignInPageClient({ providers }) {
+interface Provider {
+  id: string;
+  name: string;
+}
+
+interface SignInPageClientProps {
+  providers: Record<string, Provider> | null;
+}
+
+export default function SignInPageClient({ providers }: SignInPageClientProps) {
   return (
     <div className="relative w-full h-screen overflow-hidden">
       {/* Background image */}

@@ -14,7 +14,7 @@ interface messagePayload {
   };
 }
 
-export async function POST(req: NextRequest, response: NextResponse) {
+export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
 
   const { roomId, password } = await req.json();
