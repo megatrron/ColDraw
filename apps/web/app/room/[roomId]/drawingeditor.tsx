@@ -5,7 +5,11 @@ import { Editor, EditorEventType, invertCommand, SerializableCommand } from 'js-
 import axios from 'axios';
 import { useParams } from 'next/navigation';
 
-export default function DrawingBoard(userId: any) {
+interface DrawingBoardProps {
+  userId: string;
+}
+
+export default function DrawingBoard({ userId }: DrawingBoardProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorInstance = useRef<Editor | null>(null);
   const params = useParams();
@@ -41,7 +45,7 @@ export default function DrawingBoard(userId: any) {
 
       window.addEventListener('resize', handleResize);
 
-      let strokeStorage: any[] = [];
+      let strokeStorage: unknown[] = [];
       let hasChanged = false;
 
       // Fetch and apply strokes on mount
@@ -74,7 +78,7 @@ export default function DrawingBoard(userId: any) {
         }
       })();
 
-      const applySerializedCommand = (serializedCommand: any) => {
+      const applySerializedCommand = (serializedCommand: unknown) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
@@ -172,7 +176,7 @@ export default function DrawingBoard(userId: any) {
         }
       };
     }
-  }, []);
+  }, [params.roomId, userId]);
 
 
   return <div ref={editorRef}></div>;

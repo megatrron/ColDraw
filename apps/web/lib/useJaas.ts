@@ -1,4 +1,4 @@
-/* eslint-disable turbo/no-undeclared-env-vars */
+// Removed unused eslint-disable directive
 // lib/useJaas.ts
 'use client'
 
@@ -11,7 +11,15 @@ import axios from 'axios'
 //   userId: string
 // }
 
-export function useJaas ({session, roomId}:{session:any, roomId:any}) {
+interface Session {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export function useJaas ({session, roomId}:{session: Session, roomId: string}) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [token, setToken] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +73,7 @@ export function useJaas ({session, roomId}:{session:any, roomId:any}) {
         } else {
           setError('Failed to get token')
         }
-      } catch (err) {
+      } catch {
         setError('Token request failed')
       }
     }

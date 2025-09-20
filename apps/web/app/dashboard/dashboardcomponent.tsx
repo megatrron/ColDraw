@@ -74,13 +74,13 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
       if (res.status === 200) {
         router.push(`/room/${id}`);
       }
-    } catch (error) {
+    } catch {
       alert("Invalid room or password.");
     }
   };
-  const handleJoinAsAdmin = () => {
-    // Join workspace as admin logic here
-  }
+  // const handleJoinAsAdmin = () => {
+  //   // Join workspace as admin logic here
+  // }
 
   const handleDeleteRoom = async (roomId: string) => {
     try {

@@ -102,12 +102,16 @@ function JitsiEmbedContent({ session }: { session: any }) {
           await apiRef.current.executeCommand('muteEveryone');
           setOthersMuted(true);
           return;
-        } catch {}
+        } catch (error) {
+          console.warn('Failed to mute all participants:', error);
+        }
         // Fallback: reduce volume of all to 0 (if supported)
         const participants = await apiRef.current.getParticipantsInfo();
         for (const p of participants) {
           if (p.participantId) {
-            try { await apiRef.current.setParticipantVolume(p.participantId, 0); } catch {}
+            try { await apiRef.current.setParticipantVolume(p.participantId, 0); } catch (error) {
+              console.warn('Failed to set participant volume:', error);
+            }
           }
         }
         setOthersMuted(true);
@@ -117,7 +121,9 @@ function JitsiEmbedContent({ session }: { session: any }) {
         const participants = await apiRef.current.getParticipantsInfo();
         for (const p of participants) {
           if (p.participantId) {
-            try { await apiRef.current.setParticipantVolume(p.participantId, 1); } catch {}
+            try { await apiRef.current.setParticipantVolume(p.participantId, 1); } catch (error) {
+              console.warn('Failed to set participant volume:', error);
+            }
           }
         }
         setOthersMuted(false);
@@ -228,7 +234,9 @@ function JitsiEmbedContent({ session }: { session: any }) {
           onApiReady={(api) => {
             apiRef.current = api;
             // Hide filmstrip if visible (in addition to interface config)
-            try { api.executeCommand('toggleFilmStrip'); } catch {}
+            try { api.executeCommand('toggleFilmStrip'); } catch (error) {
+              console.warn('Failed to toggle filmstrip:', error);
+            }
             // start in audio-only, microphone unmuted per config
           }}
         />

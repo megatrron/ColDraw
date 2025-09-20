@@ -1,9 +1,17 @@
 import { prisma } from "@repo/db/config";
 import { NextRequest, NextResponse } from "next/server";
 
+type StrokeData = {
+  id: string;
+  points: number[][];
+  color: string;
+  width: number;
+  [key: string]: unknown;
+};
+
 type StrokeResponse =
   | { error: string }
-  | { strokeData: any[] };
+  | { strokeData: StrokeData[] };
 
 export async function PUT(
   request: NextRequest
@@ -23,7 +31,7 @@ export async function PUT(
     });
 
     return NextResponse.json(
-      { strokeData: drawing.strokeData as any[] },
+      { strokeData: drawing.strokeData as StrokeData[] },
       { status: 200 }
     );
   } catch (error) {
