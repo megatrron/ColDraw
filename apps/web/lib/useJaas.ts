@@ -14,8 +14,8 @@ import axios from 'axios'
 interface Session {
   user: {
     id: string;
-    name: string;
-    email: string;
+    name?: string | null;
+    email?: string | null;
   };
 }
 

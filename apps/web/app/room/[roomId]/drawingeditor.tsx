@@ -45,7 +45,7 @@ export default function DrawingBoard({ userId }: DrawingBoardProps) {
 
       window.addEventListener('resize', handleResize);
 
-      let strokeStorage: unknown[] = [];
+      let strokeStorage: Record<string, unknown>[] = [];
       let hasChanged = false;
 
       // Fetch and apply strokes on mount
@@ -130,7 +130,7 @@ export default function DrawingBoard({ userId }: DrawingBoardProps) {
 
           if (evt.command instanceof SerializableCommand) {
             const serializedCommand = invertCommand(evt.command).serialize();
-            strokeStorage = strokeStorage.filter((c) => c.id !== serializedCommand.id);
+            strokeStorage = strokeStorage.filter((c) => (c as any).id !== (serializedCommand as any).id);
             hasChanged = true; // Mark as changed
             applySerializedCommand(serializedCommand);
           } else {

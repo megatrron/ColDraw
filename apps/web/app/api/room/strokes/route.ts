@@ -55,7 +55,7 @@ export async function GET(
       where: { roomId },
     });
     return NextResponse.json(
-      { strokeData: Array.isArray(drawing?.strokeData) ? drawing.strokeData : [] },
+      { strokeData: Array.isArray(drawing?.strokeData) ? drawing.strokeData as StrokeData[] : [] },
       { status: 200 }
     );
   } catch (error) {

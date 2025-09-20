@@ -1,11 +1,9 @@
 "use client";
 
 import axios from "axios";
-import { Session } from "next-auth";
 import { useParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import "js-draw/styles";
-import JaasVoiceControls from "./voiceControls";
 import dynamic from "next/dynamic";
 import JitsiEmbed from "./voiceControls";
 type ChatMessage = {
@@ -17,15 +15,22 @@ type ChatMessage = {
 const DrawingEditor = dynamic(() => import('./drawingeditor'), {
   ssr: false, // Disable SSR
 });
-export default function RoomAuth({ session }: { session: any }) {
-  if (!session || session.status === 'loading') return <div>Loading...</div>;
-  if (session.status === 'unauthenticated') return <div>Redirecting...</div>;
+interface Session {
+  user: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  };
+}
+
+export default function RoomAuth({ session }: { session: Session }) {
+  if (!session) return <div>Loading...</div>;
   if (!session.user) return <div>Invalid session</div>;
   return (
     <RoomComponent session={session} />
   );
 }
-function RoomComponent({ session }: { session: any }) {
+function RoomComponent({ session }: { session: Session }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -132,7 +137,7 @@ function RoomComponent({ session }: { session: any }) {
 
   return (
     <div>
-      <DrawingEditor user={session.user.id} />
+      <DrawingEditor userId={session.user.id} />
       {/* Whiteboard */}
       {/* <div
         ref={editorRef}

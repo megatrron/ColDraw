@@ -1,4 +1,4 @@
-/* eslint-disable turbo/no-undeclared-env-vars */
+// Environment variables are used in this file
 import jwt from "jsonwebtoken";
 import { NextRequest, NextResponse } from "next/server";
 

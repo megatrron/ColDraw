@@ -1,19 +1,26 @@
 "use client";
 // import { JaaSMeeting } from '@jitsi/react-sdk';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useJaas } from '../../../lib/useJaas';
-import { useSession } from 'next-auth/react';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 const JaaSMeeting = dynamic(
   () => import("@jitsi/react-sdk").then((mod) => mod.JaaSMeeting),
   { ssr: false }
 );
-export default function JitsiEmbed({ session }: { session: any }) {
+interface Session {
+  user: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  };
+}
+
+export default function JitsiEmbed({ session }: { session: Session }) {
 
 
-  if (session.status === "loading") return <div>Loading...</div>;
-  if (session.status === "unauthenticated") return <div>Redirecting...</div>;
+  if (!session) return <div>Loading...</div>;
+  if (!session.user) return <div>Redirecting...</div>;
 
   return (
     <div>
@@ -22,7 +29,7 @@ export default function JitsiEmbed({ session }: { session: any }) {
   );
 }
 
-function JitsiEmbedContent({ session }: { session: any }) {
+function JitsiEmbedContent({ session }: { session: Session }) {
   const params = useParams();
   const roomId = params.roomId as string;
   const apiRef = useRef<any>(null);
@@ -34,7 +41,7 @@ function JitsiEmbedContent({ session }: { session: any }) {
   const email = session?.user?.email;
   console.log("User info:", { id, name, email });
   // ✅ Call your hook at the top level, not inside useEffect
-  const { isLoaded, token, error } = useJaas({ session, roomId });
+  const { token, error } = useJaas({ session, roomId });
 
   if (error) return <div>Error: {error}</div>;
   if (!token) return <div>Loading Jitsi...</div>;
