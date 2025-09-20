@@ -89,5 +89,4 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true, // Important for Vercel deployment
 };
