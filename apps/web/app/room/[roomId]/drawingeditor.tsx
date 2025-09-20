@@ -12,7 +12,7 @@ export default function DrawingBoard(userId: any) {
   useEffect(() => {
     // Prevent double init (StrictMode fix in dev)
     if (editorInstance.current) return;
-    const ws = new WebSocket("ws://localhost:8080");
+    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001");
     if (editorRef.current) {
       // Set full-screen dimensions before initializing
       editorRef.current.style.position = 'fixed';

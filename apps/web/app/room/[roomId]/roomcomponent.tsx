@@ -18,8 +18,9 @@ const DrawingEditor = dynamic(() => import('./drawingeditor'), {
   ssr: false, // Disable SSR
 });
 export default function RoomAuth({ session }: { session: any }) {
-  if (session.status === 'loading') return <div>Loading...</div>;
+  if (!session || session.status === 'loading') return <div>Loading...</div>;
   if (session.status === 'unauthenticated') return <div>Redirecting...</div>;
+  if (!session.user) return <div>Invalid session</div>;
   return (
     <RoomComponent session={session} />
   );
@@ -68,13 +69,17 @@ function RoomComponent({ session }: { session: any }) {
     ws.onmessage = (event) => {
       // server sends plain message string for chat
 
-      const parsed = JSON.parse(event.data);
-      // This could be a stroke or something else
-      if (parsed.message && parsed.roomId) {
-        setMessages((prev) => [...prev, parsed]);
-      } else {
-        // handle stroke or other payloads
-        console.log("Stroke or custom:", parsed);
+      try {
+        const parsed = JSON.parse(event.data);
+        // This could be a stroke or something else
+        if (parsed.message && parsed.roomId) {
+          setMessages((prev) => [...prev, parsed]);
+        } else {
+          // handle stroke or other payloads
+          console.log("Stroke or custom:", parsed);
+        }
+      } catch (error) {
+        console.error("Error parsing WebSocket message:", error);
       }
 
     };
@@ -105,12 +110,13 @@ function RoomComponent({ session }: { session: any }) {
   // };
   const handleSend = () => {
     if (!inputMessage.trim()) return;
+    if (!session?.user?.id) return;
 
     const newMessage: ChatMessage = {
-      senderId: session.user.id,
-      senderName: session.user.name ?? null,
-      message: inputMessage,
-      roomId: params.roomId as string,
+      senderId: String(session.user.id),
+      senderName: session.user.name ? String(session.user.name) : null,
+      message: String(inputMessage),
+      roomId: String(params.roomId),
     };
 
     wsRef.current?.send(
@@ -172,7 +178,7 @@ function RoomComponent({ session }: { session: any }) {
             {messages.map((msg, index) => (
               <div key={index} className="bg-gray-200 p-2 rounded text-sm">
                 <div className="text-[10px] text-gray-600 mb-1">{msg.senderName || "Unknown"}</div>
-                <div>{msg.message}</div>
+                <div>{String(msg.message || "")}</div>
               </div>
             ))}
             <div ref={chatEndRef} />
