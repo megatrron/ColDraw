@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "apps/web/app/api/**/*.ts": {
+      "includeFiles": "packages/db/src/generated/prisma/**"
+    }
+  },
+  "buildCommand": "cd packages/db && pnpm run build && cd ../../ && pnpm turbo run build"
+}
