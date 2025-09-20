@@ -1,4 +1,4 @@
-/* eslint-disable turbo/no-undeclared-env-vars */
+// Environment variables are used in this file
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
