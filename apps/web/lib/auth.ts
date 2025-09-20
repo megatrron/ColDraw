@@ -8,6 +8,7 @@ import { hash, compare } from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+  debug: process.env.NODE_ENV === 'development',
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -24,13 +25,16 @@ export const authOptions: NextAuthOptions = {
         const { email, password, name } = credentials ?? {};
         if (!email || !password) return null;
         try {
+          console.log('Attempting to authenticate user:', email);
           const existingUser = await prisma.user.findUnique({
             where: { email },
           });
+          console.log('User found:', !!existingUser);
 
           // Existing user with credentials flow
           if (existingUser && existingUser.password) {
             const isValid = await compare(password, existingUser.password);
+            console.log('Password validation result:', isValid);
             if (!isValid) return null;
             return {
               id: existingUser.id,
@@ -56,7 +60,8 @@ export const authOptions: NextAuthOptions = {
             },
           });
           return { id: newUser.id, name: newUser.name, email: newUser.email };
-        } catch {
+        } catch (error) {
+          console.error('Authentication error:', error);
           return null;
         }
       },
@@ -84,4 +89,5 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
+  trustHost: true, // Important for Vercel deployment
 };
