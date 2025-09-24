@@ -5,11 +5,17 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**", "src/generated/**", "packages/db/src/generated/**"],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**",
+        "src/generated/**",
+        "packages/db/src/generated/**"
+      ],
       "env": [
         "NEXTAUTH_URL",
         "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET", 
+        "GOOGLE_CLIENT_SECRET",
         "NEXTAUTH_SECRET",
         "DATABASE_URL",
         "NODE_ENV"
@@ -24,6 +30,9 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "copy:prisma": {
+      "cache": false
     }
   }
 }
