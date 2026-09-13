@@ -2,26 +2,38 @@
 import jwt from "jsonwebtoken";
 import { NextRequest, NextResponse } from "next/server";
 
-const JAAS_APP_ID = process.env.NEXT_PUBLIC_JAAS_APP_ID!; // Your App ID
-const JAAS_API_SECRET = process.env.NEXT_PUBLIC_JAAS_API_SECRET!.replace(
-  /\\n/g,
-  "\n"
-); // Your API Secret
-
 export async function POST(request: NextRequest) {
+  const JAAS_APP_ID =
+    process.env.NEXT_PUBLIC_JAAS_APP_ID || process.env["JAAS_APP_ID"];
+  const rawSecret =
+    process.env.NEXT_PUBLIC_JAAS_API_SECRET || process.env.JAAS_API_SECRET || "";
+
+  if (!JAAS_APP_ID || !rawSecret) {
+    console.error("Missing JaaS credentials");
+    return NextResponse.json(
+      { error: "JaaS credentials not configured" },
+      { status: 500 }
+    );
+  }
+
+  const JAAS_API_SECRET = rawSecret
+    .replace(/\\n/g, "\n")
+    .replace(/\\/g, "")
+    .trim();
+
   const { id, email, name, roomName } = await request.json();
   console.log("Received data:", { id, email, name, roomName });
 
   try {
     const now = Math.floor(Date.now() / 1000);
-    
+
     const payload = {
       iss: "chat", // Must be 'chat' for JaaS
       sub: JAAS_APP_ID, // Use your actual App ID from env variable
       aud: "jitsi",
       exp: now + 2 * 60 * 60, // 2 hours from now
       nbf: now - 10, // Not before (10 seconds ago for clock skew)
-      room: roomName, // Use dynamic room name
+      room: roomName || "*", // Use dynamic room name
       context: {
         user: {
           id: id,
@@ -32,7 +44,7 @@ export async function POST(request: NextRequest) {
           livestreaming: false,
           recording: false,
           transcription: false,
-          'outbound-call': false,
+          "outbound-call": false,
         },
       },
     };

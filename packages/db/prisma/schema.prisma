@@ -8,6 +8,7 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 // NextAuth required models
 model Account {
   id                String  @id @default(cuid())
@@ -51,11 +52,9 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
-  // drawings      Drawing[]
-  // collaborations Collaboration[]
-  rooms       RoomUser[]   // Rooms this user is part of
-  ownedRooms  Room[]       @relation("RoomAdmins")
-  chats       Chat[]       @relation("SentMessages")
+  rooms         RoomUser[]   // Rooms this user is part of
+  ownedRooms    Room[]       @relation("RoomAdmins")
+  chats         Chat[]       @relation("SentMessages")
   @@map("users")
 }
 
@@ -68,53 +67,14 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// Your app-specific models
-// model Drawing {
-//   id          String   @id @default(cuid())
-//   title       String
-//   data        Json     @default("{}")
-//   createdAt   DateTime @default(now()) @map("created_at")
-//   updatedAt   DateTime @updatedAt @map("updated_at")// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-//   creatorId   String   @map("creator_id")
-//   isPublic    Boolean  @default(false) @map("is_public")
-  
-//   creator       User @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-//   collaborators Collaboration[]
-
-//   @@map("drawings")
-// }
-// enum CollaborationRole {
-//   VIEWER
-//   EDITOR
-//   ADMIN
-// }
-// model Collaboration {
-//   id        String            @id @default(cuid())
-//   drawingId String            @map("drawing_id")
-//   userId    String            @map("user_id")
-//   role      CollaborationRole @default(VIEWER)
-//   createdAt DateTime          @default(now()) @map("created_at")
-  
-//   drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
-//   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-//   @@unique([drawingId, userId])
-//   @@map("collaborations")
-// }
-
 model Room {
-  id          String       @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
   password    String?
   adminId     String
-  admin       User         @relation("RoomAdmins", fields: [adminId], references: [id])
+  admin       User          @relation("RoomAdmins", fields: [adminId], references: [id], onDelete: Cascade)
 
-  users       RoomUser[]   // Users in the room
+  users       RoomUser[]    // Users in the room
   chats       Chat[]
   drawings    RoomDrawing[] // Drawings in the room
 }
@@ -124,8 +84,8 @@ model RoomUser {
   userId    String
   roomId    String
 
-  user      User     @relation(fields: [userId], references: [id])
-  room      Room     @relation(fields: [roomId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roomId]) // Prevent duplicates
 }
@@ -136,41 +96,12 @@ model Chat {
   time      DateTime @default(now())
 
   senderId  String
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   roomId    String
-  room      Room     @relation(fields: [roomId], references: [id])
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }
 
-// prisma/schema.prisma
-// model Drawing {
-//   id        String   @id @default(cuid())
-//   roomId    String
-//   createdBy String
-//   createdAt DateTime @default(now())
-//   updatedAt DateTime @updatedAt
-//   strokes   Stroke[]
-
-//   @@index([roomId])
-// }
-
-// model Stroke {
-//   id         String    @id @default(cuid())
-//   drawingId  String
-//   strokeId   String    @unique
-//   userId     String
-//   order      Int
-//   strokeData Json
-//   createdAt  DateTime  @default(now())
-//   deletedAt  DateTime?
-
-//   drawing Drawing @relation(fields: [drawingId], references: [id], onDelete: Cascade)
-
-//   @@index([drawingId, order])
-//   @@index([strokeId])
-// }
-
-// Prisma Schema
 model RoomDrawing {
   id          String   @id @default(cuid())
   roomId      String   @unique
@@ -178,5 +109,5 @@ model RoomDrawing {
   lastUpdated DateTime @default(now()) @updatedAt
   createdAt   DateTime @default(now())
 
-  room      Room     @relation(fields: [roomId], references: [id])
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }

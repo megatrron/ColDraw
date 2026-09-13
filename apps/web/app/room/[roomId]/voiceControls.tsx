@@ -32,6 +32,7 @@ export default function JitsiEmbed({ session }: { session: Session }) {
 function JitsiEmbedContent({ session }: { session: Session }) {
   const params = useParams();
   const roomId = params.roomId as string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const apiRef = useRef<any>(null);
   const [micMuted, setMicMuted] = useState(false);
   const [othersMuted, setOthersMuted] = useState(false);

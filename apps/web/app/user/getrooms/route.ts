@@ -1,33 +1,38 @@
-// user/getrooms/route.ts
 import { prisma } from "@repo/db/config";
-import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../../lib/auth";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-    const id = request.nextUrl.searchParams.get("id");
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
-    if (!id) {
-        return new Response(JSON.stringify({ message: "Missing user ID" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-        });
-    }
+  const userId = session.user.id;
 
-    try {
-        const rooms = await prisma.room.findMany({
-            where: {
-                adminId: id,
-            },
-        });
+  try {
+    const rooms = await prisma.room.findMany({
+      where: {
+        OR: [
+          { adminId: userId },
+          { users: { some: { userId } } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        adminId: true,
+        password: true,
+      },
+      orderBy: {
+        id: "desc",
+      },
+    });
 
-        return new Response(JSON.stringify({ rooms }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        });
-    } catch (error) {
-        console.error("Error fetching rooms:", error);
-        return new Response(JSON.stringify({ message: "Error fetching rooms" }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-        });
-    }
+    return NextResponse.json({ rooms }, { status: 200 });
+  } catch (error) {
+    console.error("Error fetching rooms:", error);
+    return NextResponse.json({ message: "Error fetching rooms" }, { status: 500 });
+  }
 }

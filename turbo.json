@@ -1,6 +1,20 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "NEXTAUTH_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "NEXTAUTH_SECRET",
+    "DATABASE_URL",
+    "NODE_ENV",
+    "JAAS_APP_ID",
+    "JAAS_API_SECRET",
+    "JAAS_KEY_ID",
+    "NEXT_PUBLIC_JAAS_APP_ID",
+    "NEXT_PUBLIC_JAAS_API_SECRET",
+    "NEXT_PUBLIC_WS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -13,16 +27,24 @@
         "packages/db/src/generated/**"
       ],
       "env": [
-        "NEXTAUTH_URL",
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET",
-        "NEXTAUTH_SECRET",
-        "DATABASE_URL",
-        "NODE_ENV"
+        "JAAS_APP_ID",
+        "JAAS_API_SECRET",
+        "JAAS_KEY_ID",
+        "NEXT_PUBLIC_JAAS_APP_ID",
+        "NEXT_PUBLIC_JAAS_API_SECRET",
+        "NEXT_PUBLIC_WS_URL"
       ]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": ["^lint"],
+      "env": [
+        "JAAS_APP_ID",
+        "JAAS_API_SECRET",
+        "JAAS_KEY_ID",
+        "NEXT_PUBLIC_JAAS_APP_ID",
+        "NEXT_PUBLIC_JAAS_API_SECRET",
+        "NEXT_PUBLIC_WS_URL"
+      ]
     },
     "check-types": {
       "dependsOn": ["^check-types"]

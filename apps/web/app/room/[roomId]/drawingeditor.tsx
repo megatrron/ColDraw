@@ -1,35 +1,62 @@
 "use client";
-// import dynamic from 'next/dynamic';
+
 import { useEffect, useRef } from 'react';
-import { Editor, EditorEventType, invertCommand, SerializableCommand } from 'js-draw';
-import axios from 'axios';
+import Editor, { EditorEventType, invertCommand, SerializableCommand } from 'js-draw';
+import 'js-draw/styles';
 import { useParams } from 'next/navigation';
+import axios from 'axios';
 
 interface DrawingBoardProps {
   userId: string;
 }
 
+interface StoredStroke {
+  id?: string;
+  [key: string]: unknown;
+}
+
+function getWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    if (typeof window !== "undefined") {
+      try {
+        const parsed = new URL(process.env.NEXT_PUBLIC_WS_URL);
+        if (parsed.hostname === "localhost" && window.location.hostname !== "localhost") {
+          parsed.hostname = window.location.hostname;
+          return parsed.toString();
+        }
+      } catch {
+        // use default
+      }
+    }
+    return process.env.NEXT_PUBLIC_WS_URL;
+  }
+  const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+  return `ws://${host}:3001`;
+}
+
 export default function DrawingBoard({ userId }: DrawingBoardProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorInstance = useRef<Editor | null>(null);
+  const isApplyingRemoteCommand = useRef<boolean>(false);
   const params = useParams();
+
   useEffect(() => {
     // Prevent double init (StrictMode fix in dev)
     if (editorInstance.current) return;
-    const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001");
-    if (editorRef.current) {
-      // Set full-screen dimensions before initializing
-      editorRef.current.style.position = 'fixed';
-      editorRef.current.style.top = '0';
-      editorRef.current.style.left = '0';
-      editorRef.current.style.width = `${window.innerWidth}px`;
-      editorRef.current.style.height = `${window.innerHeight}px`;
+    const container = editorRef.current;
 
-      const editor = new Editor(editorRef.current);
+    if (container) {
+      // Set full-screen dimensions before initializing
+      container.style.position = 'fixed';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.width = `${window.innerWidth}px`;
+      container.style.height = `${window.innerHeight}px`;
+
+      const editor = new Editor(container);
       editor.addToolbar();
       editor.getRootElement().style.width = '100%';
       editor.getRootElement().style.height = '100%';
-      console.log("Editor initialized:", editor);
       editorInstance.current = editor;
 
       // Auto-resize
@@ -37,147 +64,183 @@ export default function DrawingBoard({ userId }: DrawingBoardProps) {
       editor.dispatch(editor.setBackgroundStyle({ autoresize: true }), addToHistory);
 
       const handleResize = () => {
-        if (editorRef.current) {
-          editorRef.current.style.width = `${window.innerWidth}px`;
-          editorRef.current.style.height = `${window.innerHeight}px`;
-        }
+        container.style.width = `${window.innerWidth}px`;
+        container.style.height = `${window.innerHeight}px`;
       };
 
       window.addEventListener('resize', handleResize);
 
-      let strokeStorage: Record<string, unknown>[] = [];
+      let strokeStorage: StoredStroke[] = [];
       let hasChanged = false;
+      let isCleanedUp = false;
+      let ws: WebSocket | null = null;
+      let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const sendJoin = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "join",
+              payload: {
+                roomId: params.roomId,
+                userId: userId,
+              },
+            })
+          );
+        }
+      };
+
+      const setupWs = () => {
+        if (isCleanedUp) return;
+        try {
+          const wsUrl = getWsUrl();
+          ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            console.log("Whiteboard WebSocket connected");
+            sendJoin();
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type !== "stroke") return;
+
+              const strokePayload = msg.payload?.message ?? msg.message;
+              if (!strokePayload) return;
+
+              isApplyingRemoteCommand.current = true;
+              const command = SerializableCommand.deserialize(strokePayload, editor);
+              command.apply(editor);
+              strokeStorage.push(strokePayload as StoredStroke);
+            } catch (err) {
+              console.warn("Failed to apply remote stroke:", err);
+            } finally {
+              isApplyingRemoteCommand.current = false;
+            }
+          };
+
+          ws.onclose = () => {
+            if (!isCleanedUp) {
+              reconnectTimer = setTimeout(setupWs, 2000);
+            }
+          };
+
+          ws.onerror = () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.close();
+            }
+          };
+        } catch {
+          if (!isCleanedUp) {
+            reconnectTimer = setTimeout(setupWs, 2000);
+          }
+        }
+      };
+
+      setupWs();
 
       // Fetch and apply strokes on mount
       (async () => {
         try {
-          ws.onopen = () => {
-            ws.send(
-              JSON.stringify({
-                type: "join",
-                payload: {
-                  "roomId": params.roomId,
-                  "userId": userId
-                }
-              })
-            )
-          }
           const response = await axios.get('/api/room/strokes', {
             params: { roomId: params.roomId },
           });
           const strokesFromDB = response.data.strokeData;
           if (Array.isArray(strokesFromDB)) {
-            strokeStorage = strokesFromDB;
+            strokeStorage = strokesFromDB as StoredStroke[];
+            isApplyingRemoteCommand.current = true;
             strokesFromDB.forEach((x) => {
-              const command = SerializableCommand.deserialize(x, editor);
-              command.apply(editor);
+              try {
+                const command = SerializableCommand.deserialize(x, editor);
+                command.apply(editor);
+              } catch (deserializeErr) {
+                console.warn("Failed to deserialize initial stroke:", deserializeErr);
+              }
             });
+            isApplyingRemoteCommand.current = false;
           }
         } catch (err) {
-          console.error("Failed to load strokes:", err);
+          console.error("Failed to load initial strokes:", err);
+          isApplyingRemoteCommand.current = false;
         }
       })();
 
       const applySerializedCommand = (serializedCommand: unknown) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              type: "stroke",
-              payload: {
-                "roomId": params.roomId,
-                "userId": userId,
-                "message": serializedCommand
-              }
-            })
-          );
-        } else {
-          ws.addEventListener('open', () => {
-            ws.send(
-              JSON.stringify({
-                type: "stroke",
-                payload: {
-                  "roomId": params.roomId,
-                  "userId": userId,
-                  "message": serializedCommand
-                }
-              })
-            );
-          }, { once: true });
+        const payload = JSON.stringify({
+          type: "stroke",
+          payload: {
+            roomId: params.roomId,
+            userId: userId,
+            message: serializedCommand,
+          },
+        });
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(payload);
         }
       };
+
       const applyCommandsToOthers = (sourceEditor: Editor) => {
         sourceEditor.notifier.on(EditorEventType.CommandDone, (evt) => {
-          console.log('Command done:', evt);
-          console.log(strokeStorage);
-          if (evt.kind !== EditorEventType.CommandDone) {
-            throw new Error('Incorrect event type');
-          }
+          if (isApplyingRemoteCommand.current) return;
+          if (evt.kind !== EditorEventType.CommandDone) return;
 
           if (evt.command instanceof SerializableCommand) {
-            const serializedCommand = evt.command.serialize();
+            const serializedCommand = evt.command.serialize() as StoredStroke;
             strokeStorage.push(serializedCommand);
-            hasChanged = true; // Mark as changed
+            hasChanged = true;
             applySerializedCommand(serializedCommand);
-          } else {
-            console.log('Nonserializable command');
           }
         });
+
         sourceEditor.notifier.on(EditorEventType.CommandUndone, (evt) => {
-          // Type assertion.
-          if (evt.kind !== EditorEventType.CommandUndone) {
-            throw new Error('Incorrect event type');
-          }
+          if (isApplyingRemoteCommand.current) return;
+          if (evt.kind !== EditorEventType.CommandUndone) return;
 
           if (evt.command instanceof SerializableCommand) {
-            const serializedCommand = invertCommand(evt.command).serialize();
-            strokeStorage = strokeStorage.filter((c) => (c as any).id !== (serializedCommand as any).id);
-            hasChanged = true; // Mark as changed
+            const serializedCommand = invertCommand(evt.command).serialize() as StoredStroke;
+            strokeStorage = strokeStorage.filter(
+              (c) => c.id !== serializedCommand.id
+            );
+            hasChanged = true;
             applySerializedCommand(serializedCommand);
-          } else {
-            console.log('Nonserializable command');
           }
         });
       };
+
       applyCommandsToOthers(editor);
-      setInterval(async () => {
+
+      // Auto-save changed strokes to database
+      const saveInterval = setInterval(async () => {
         if (hasChanged) {
           try {
-            const response = await axios.put('/api/room/strokes', {
+            await axios.put('/api/room/strokes', {
               strokeData: strokeStorage,
               roomId: params.roomId,
             });
-            console.log('Full API response:', response.data);
-            const strokesFromDB = response.data.strokeData;
-            if (Array.isArray(strokesFromDB)) {
-              strokeStorage = strokesFromDB;
-              strokeStorage.forEach((x) => {
-                const command = SerializableCommand.deserialize(x, editor);
-                command.apply(editor);
-              });
-              hasChanged = false; // Reset flag after successful save
-            } else {
-              console.warn("Server did not return strokes array:", response.data);
-            }
+            hasChanged = false;
           } catch (err) {
-            console.error("API error:", err);
+            console.error("Auto-save stroke API error:", err);
           }
         }
       }, 5000);
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        const command = SerializableCommand.deserialize(msg.message, editor);
-        command.apply(editor);
-      }
+
       return () => {
-        // window.removeEventListener('resize', handleResize);
-        if (editorRef.current) {
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-          editorRef.current.innerHTML = '';
+        isCleanedUp = true;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        clearInterval(saveInterval);
+        window.removeEventListener('resize', handleResize);
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+          ws.close();
         }
+        if (container) {
+          container.innerHTML = '';
+        }
+        editorInstance.current = null;
       };
     }
-  }, [params.roomId, userId]);
+  }, [userId, params.roomId]);
 
-
-  return <div ref={editorRef}></div>;
+  return <div ref={editorRef} />;
 }

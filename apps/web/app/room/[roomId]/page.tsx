@@ -1,6 +1,6 @@
-import { redirect } from "next/dist/client/components/navigation.react-server";
+import { redirect } from "next/navigation";
 import RoomComponent from "./roomcomponent";
-import { getServerSession } from 'next-auth';
+import { getServerSession } from "next-auth";
 import { authOptions } from "../../../lib/auth";
 
 export default async function Room() {
@@ -8,7 +8,9 @@ export default async function Room() {
   if (!session) {
     redirect("/auth/login");
   }
-  return <div>
-    <RoomComponent session={session} />
-  </div>;
+  return (
+    <div>
+      <RoomComponent session={session} />
+    </div>
+  );
 }

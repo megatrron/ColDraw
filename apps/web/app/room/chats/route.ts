@@ -1,37 +1,58 @@
 import { prisma } from "@repo/db/config";
-import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../../lib/auth";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
-  const limit = request.nextUrl.searchParams.get("limit");
-  const roomId = request.nextUrl.searchParams.get("roomId");
-  if (!roomId)
-    return new Response(JSON.stringify({ message: "Missing roomId" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  if (!limit) {
-    return new Response(JSON.stringify({ message: "Missing limit" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
+  const limitParam = request.nextUrl.searchParams.get("limit");
+  const roomId = request.nextUrl.searchParams.get("roomId");
+
+  if (!roomId) {
+    return NextResponse.json({ message: "Missing roomId" }, { status: 400 });
+  }
+
+  const userId = session.user.id;
+
   try {
+    // Verify room access
+    const room = await prisma.room.findFirst({
+      where: {
+        id: roomId,
+        OR: [
+          { adminId: userId },
+          { users: { some: { userId } } },
+        ],
+      },
+    });
+
+    if (!room) {
+      return NextResponse.json({ message: "Room not found or access denied" }, { status: 403 });
+    }
+
+    const limit = Math.min(Math.max(parseInt(limitParam || "50", 10) || 50, 1), 100);
+
     const chats = await prisma.chat.findMany({
       where: {
-        roomId: roomId,
+        roomId,
       },
       orderBy: {
-        time: "desc", // Get latest chats first
+        time: "desc",
       },
-      take: 10, // Only get 10
+      take: limit,
       include: {
         sender: {
           select: { name: true },
         },
       },
     });
-    chats.reverse(); // Reverse to show oldest first
+
+    chats.reverse(); // Oldest first for chat window display
+
     const shaped = chats.map((c) => ({
       id: c.id,
       message: c.message,
@@ -41,15 +62,9 @@ export async function GET(request: NextRequest) {
       roomId: c.roomId,
     }));
 
-    return new Response(JSON.stringify({ chats: shaped }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ chats: shaped }, { status: 200 });
   } catch (error) {
     console.error("Error fetching chats:", error);
-    return new Response(JSON.stringify({ message: "Error fetching chats" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ message: "Error fetching chats" }, { status: 500 });
   }
 }

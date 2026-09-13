@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Session } from "next-auth";
@@ -7,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { SettingsIcon } from "../../public/icons/settings";
 import { useRouter } from "next/navigation";
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -21,7 +21,8 @@ declare module "next-auth" {
 interface Room {
   id: string;
   name: string;
-  password?: string;
+  password?: string | null;
+  adminId?: string;
 }
 
 export const Dashboard = ({ user }: { user: Session["user"] }) => {
@@ -34,174 +35,217 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomDropdownOpen, setRoomDropdownOpen] = useState<string | null>(null);
   const [joinWorkspace, setJoinWorkspace] = useState(false);
-  const [joinRoomId, setJoinRoomId] = useState<string | null>(null);
-  const [joinRoomPassword, setJoinRoomPassword] = useState<string | null>(null);
   const router = useRouter();
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const joinworkspaceRef = useRef<HTMLDivElement | null>(null);
+  const roomDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const handleCreate = async () => {
+    if (!name.trim()) {
+      alert("Please enter a workspace name");
+      return;
+    }
+
     try {
       const response = await axios.post("/user/createroom", {
-        name,
-        password,
-        adminId: user.id,
+        name: name.trim(),
+        password: password.trim() || undefined,
       });
       const newRoom = response.data.room;
-      setRooms((prev) => [...prev, newRoom]);
+      setRooms((prev) => [newRoom, ...prev]);
       setName("");
       setPassword("");
       setWorkspaces(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error creating room:", error);
+      alert("Failed to create workspace. Please try again.");
     }
   };
+
   const handleJoin = async (id: string, pass: string) => {
-    setJoinRoomId(id);
-    setJoinRoomPassword(pass);
+    const trimmedId = id.trim();
+    if (!trimmedId) {
+      alert("Please enter a workspace ID");
+      return;
+    }
+
     try {
-      console.log("Joining room with ID:", id, "and password:", pass);
-      console.log("Joining room with ID:", joinRoomId, "and password:", joinRoomPassword);
       const res = await axios.post("/user/joinroom", {
-        roomId: id,
-        password: pass
+        roomId: trimmedId,
+        password: pass.trim() || undefined,
       });
-      setJoinRoomId(null);
-      setJoinRoomPassword(null);
 
       if (res.status === 200) {
-        router.push(`/room/${id}`);
+        router.push(`/room/${trimmedId}`);
       }
     } catch {
-      alert("Invalid room or password.");
+      alert("Invalid room ID or password.");
     }
   };
-  // const handleJoinAsAdmin = () => {
-  //   // Join workspace as admin logic here
-  // }
 
   const handleDeleteRoom = async (roomId: string) => {
+    if (!confirm("Are you sure you want to delete this workspace?")) return;
     try {
       await axios.delete(`/user/deleteroom?id=${roomId}`);
       setRooms((prev) => prev.filter((room) => room.id !== roomId));
       setRoomDropdownOpen(null);
     } catch (error) {
       console.error("Failed to delete room:", error);
+      alert("Failed to delete workspace. You must be the admin.");
     }
   };
 
-  const handleCopyRoomURL = (roomId: string) => {
-    const url = roomId;
-    navigator.clipboard.writeText(url);
-    alert("Workspace URL copied!");
+  const handleCopyRoomId = (roomId: string) => {
+    navigator.clipboard.writeText(roomId);
+    alert("Workspace ID copied to clipboard!");
     setRoomDropdownOpen(null);
   };
 
-  const handleCopyRoomPassword = (roomPassword: string) => {
+  const handleCopyRoomPassword = (roomPassword?: string | null) => {
+    if (!roomPassword) {
+      alert("This workspace does not have a password.");
+      setRoomDropdownOpen(null);
+      return;
+    }
     navigator.clipboard.writeText(roomPassword);
-    alert("Workspace password copied!");
+    alert("Workspace password copied to clipboard!");
     setRoomDropdownOpen(null);
   };
 
   useEffect(() => {
     const fetchRooms = async () => {
-      const res = await axios.get(`/user/getrooms?id=${user.id}`);
-      setRooms(res.data.rooms);
-    };
-    fetchRooms();
-  }, [user.id]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setOpen(false);
+      try {
+        const res = await axios.get("/user/getrooms");
+        setRooms(res.data.rooms || []);
+      } catch (err) {
+        console.error("Failed to fetch rooms:", err);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    fetchRooms();
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (workspaceRef.current && !workspaceRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+      if (
+        workspaceRef.current &&
+        !workspaceRef.current.contains(e.target as Node)
+      ) {
         setWorkspaces(false);
       }
+      if (
+        joinworkspaceRef.current &&
+        !joinworkspaceRef.current.contains(e.target as Node)
+      ) {
+        setJoinWorkspace(false);
+      }
+      if (
+        roomDropdownRef.current &&
+        !roomDropdownRef.current.contains(e.target as Node)
+      ) {
+        setRoomDropdownOpen(null);
+      }
     };
-    if (workspaces) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [workspaces]);
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   return (
-    <div className="relative z-0">
-      {/* Header */}
-      <div className="w-screen h-16 rounded-b-md bg-gray-800 flex items-center justify-between px-4 z-10">
-        <div className="text-white text-2xl mx-10">ColDraw</div>
-        <div className="flex items-center gap-4 relative" ref={dropdownRef}>
-          <div className="text-white">Hello, {user?.name}</div>
-          <div
-            className="rounded-full bg-gray-200 px-4.5 py-3 cursor-pointer"
-            onClick={() => setOpen((prev) => !prev)}
-          >
-            U
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      {/* Navbar */}
+      <header className="flex justify-between items-center px-8 py-4 bg-white border-b border-gray-200 shadow-sm">
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => router.push("/dashboard")}
+        >
+          <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm">
+            C
           </div>
+          <span className="text-xl font-bold text-gray-800 tracking-tight">
+            ColDraw
+          </span>
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setOpen((prev) => !prev)}
+            className="flex items-center gap-2 focus:outline-none cursor-pointer"
+          >
+            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-semibold flex items-center justify-center border border-blue-200">
+              {user.name?.[0]?.toUpperCase() || "U"}
+            </div>
+          </button>
 
           {open && (
-            <div className="absolute right-0 top-14 mt-1 w-48 bg-white shadow-lg rounded-md z-50 border">
-              <ul className="py-2 text-sm text-gray-700">
-                <li>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-100">Profile</button>
-                </li>
-                <li>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-100">Settings</button>
-                </li>
-                <li>
-                  <button
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 text-red-600"
-                    onClick={() => signOut()}
-                  >
-                    Sign Out
-                  </button>
-                </li>
-              </ul>
+            <div
+              ref={dropdownRef}
+              className="absolute right-0 mt-3 w-56 bg-white shadow-xl rounded-xl p-2 border border-gray-100 z-50 animate-in fade-in zoom-in-95 duration-100"
+            >
+              <div className="px-3 py-2 border-b border-gray-100">
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {user.name}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition mt-1 font-medium cursor-pointer"
+              >
+                Sign out
+              </button>
             </div>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Dashboard Body */}
-      <div className="h-screen pl-4">
-        <div className="text-3xl text-gray-650 font-bold italic ml-4 mt-4">Dashboard</div>
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto px-6 py-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-200">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Welcome back, {user.name?.split(" ")[0]} 👋
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Create, join, and manage your real-time collaborative workspaces.
+            </p>
+          </div>
 
-        <div className="flex items-center mt-6">
-          <div className="ml-4 text-2xl">Your workspaces</div>
-          <div className="translate-y-2 translate-x-60 relative z-30">
+          <div className="flex items-center gap-3 relative">
             <button
               onClick={() => setWorkspaces((prev) => !prev)}
-              className="bg-blue-600 text-white hover:bg-blue-700 cursor-pointer px-4 py-2 text-base rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none"
+              className="bg-blue-600 text-white hover:bg-blue-700 cursor-pointer px-4 py-2 text-sm rounded-lg font-medium shadow-sm transition"
             >
-              Create New Workspace
+              + Create Workspace
             </button>
 
             {workspaces && (
               <div
                 ref={workspaceRef}
-                className="absolute top-14 left-0 w-96 bg-white shadow-lg rounded-xl p-6 border border-gray-200 z-50"
+                className="absolute top-12 right-0 w-96 bg-white shadow-xl rounded-xl p-6 border border-gray-200 z-50"
               >
-                <h2 className="text-lg font-semibold mb-4">Create New Workspace</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                  Create a Workspace
+                </h2>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Workspace Name
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter workspace name"
+                    placeholder="e.g. Brainstorming Project"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="mb-6">
@@ -210,52 +254,56 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                   </label>
                   <input
                     type="password"
-                    placeholder="Enter password"
+                    placeholder="Optional password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleCreate}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Create
-                  </button>
                   <button
                     onClick={() => {
                       setName("");
                       setPassword("");
                       setWorkspaces(false);
                     }}
-                    className="border px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                    className="border border-gray-300 px-4 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100 cursor-pointer transition"
                   >
                     Cancel
+                  </button>
+                  <button
+                    onClick={handleCreate}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 cursor-pointer font-medium transition"
+                  >
+                    Create
                   </button>
                 </div>
               </div>
             )}
-            <button onClick={() => setJoinWorkspace((prev) => !prev)}
-              className="mx-4 cursor-pointer rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none border border-gray-300 text-gray-800 hover:bg-gray-100 px-4 py-2 text-base">
+
+            <button
+              onClick={() => setJoinWorkspace((prev) => !prev)}
+              className="border border-gray-300 text-gray-700 hover:bg-gray-100 cursor-pointer px-4 py-2 text-sm rounded-lg font-medium transition"
+            >
               Join Workspace
             </button>
+
             {joinWorkspace && (
               <div
                 ref={joinworkspaceRef}
-                className="absolute top-14 left-0 w-96 bg-white shadow-lg rounded-xl p-6 border border-gray-200 z-50"
+                className="absolute top-12 right-0 w-96 bg-white shadow-xl rounded-xl p-6 border border-gray-200 z-50"
               >
-                <h2 className="text-lg font-semibold mb-4">Join a Workspace</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Join a Workspace</h2>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Workspace Id
+                    Workspace ID
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter workspace id"
+                    placeholder="Enter workspace ID"
                     value={joinname}
                     onChange={(e) => setJoinName(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="mb-6">
@@ -267,25 +315,25 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
                     placeholder="Enter password"
                     value={joinpassword}
                     onChange={(e) => setJoinPassword(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => handleJoin(joinname, joinpassword)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Join
-                  </button>
                   <button
                     onClick={() => {
                       setJoinName("");
                       setJoinPassword("");
                       setJoinWorkspace(false);
                     }}
-                    className="border px-4 py-2 rounded-md text-gray-700 hover:bg-gray-100"
+                    className="border border-gray-300 px-4 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-100 cursor-pointer transition"
                   >
                     Cancel
+                  </button>
+                  <button
+                    onClick={() => handleJoin(joinname, joinpassword)}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 cursor-pointer font-medium transition"
+                  >
+                    Join
                   </button>
                 </div>
               </div>
@@ -293,66 +341,94 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-6 p-4 mt-8">
-          {rooms.map((room) => (
-            <div
-              key={room.id}
-              className="w-64 h-32 bg-gray-100 p-4 rounded shadow hover:bg-gray-200 relative z-10"
-
-            >
-              <div className="flex justify-end">
-                <div className="relative z-20">
-                  <div
-                    className="cursor-pointer"
-                    onClick={() =>
-                      setRoomDropdownOpen((prev) => (prev === room.id ? null : room.id))
-                    }
-                  >
-                    <SettingsIcon />
-                  </div>
-                  {roomDropdownOpen === room.id && (
-                    <div className="absolute right-0 top-8 mt-1 w-40 bg-white shadow-lg rounded-md z-50 border">
-                      <ul className="py-2 text-sm text-gray-700">
-                        <li>
-                          <button
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                            onClick={() => handleDeleteRoom(room.id)}
-                          >
-                            Delete Workspace
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                            onClick={() => handleCopyRoomURL(room.id)}
-                          >
-                            Copy Workspace URL
-                          </button>
-                        </li>
-                        {room.password && (
-                          <li>
-                            <button
-                              className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                              onClick={() => handleCopyRoomPassword(room.password!)}
-                            >
-                              Copy Workspace Password
-                            </button>
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="cursor-pointer" onClick={() => {
-                handleJoin(room.id, room.password || "");
-              }}>
-                <h3 className="mx-auto mt-4 text-xl font-semibold text-center">
-                  {room.name}
-                </h3>
-              </div>
+        {/* Workspaces list */}
+        <div className="mt-8">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Workspaces</h2>
+          {rooms.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+              <p className="text-gray-500 text-sm">You don&apos;t have any workspaces yet.</p>
+              <button
+                onClick={() => setWorkspaces(true)}
+                className="mt-3 text-blue-600 hover:underline text-sm font-medium cursor-pointer"
+              >
+                Create your first workspace
+              </button>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6" ref={roomDropdownRef}>
+              {rooms.map((room) => (
+                <div
+                  key={room.id}
+                  className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition flex flex-col justify-between h-40 relative group"
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                      {room.adminId === user.id ? "Admin" : "Member"}
+                    </span>
+
+                    <div className="relative">
+                      <button
+                        className="p-1 rounded-md hover:bg-gray-100 text-gray-500 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRoomDropdownOpen((prev) => (prev === room.id ? null : room.id));
+                        }}
+                        title="Workspace options"
+                      >
+                        <SettingsIcon />
+                      </button>
+
+                      {roomDropdownOpen === room.id && (
+                        <div className="absolute right-0 top-8 w-56 bg-white shadow-xl rounded-lg z-50 border border-gray-100 py-1 text-sm text-gray-700">
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2"
+                            onClick={() => handleCopyRoomId(room.id)}
+                          >
+                            📋 Copy Workspace ID
+                          </button>
+                          <button
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2"
+                            onClick={() => handleCopyRoomPassword(room.password)}
+                          >
+                            🔑 Copy Workspace Password
+                          </button>
+                          {room.adminId === user.id && (
+                            <button
+                              className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 cursor-pointer flex items-center gap-2 border-t border-gray-100 mt-1"
+                              onClick={() => handleDeleteRoom(room.id)}
+                            >
+                              🗑️ Delete Workspace
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className="cursor-pointer flex-1 flex flex-col justify-center"
+                    onClick={() => handleJoin(room.id, room.password || "")}
+                  >
+                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition truncate">
+                      {room.name}
+                    </h3>
+                    {room.password && (
+                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                        🔒 Password protected
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => handleJoin(room.id, room.password || "")}
+                    className="w-full mt-2 bg-gray-50 group-hover:bg-blue-50 text-gray-700 group-hover:text-blue-600 py-1.5 rounded-lg text-xs font-semibold text-center transition"
+                  >
+                    Open Canvas →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

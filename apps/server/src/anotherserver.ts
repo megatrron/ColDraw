@@ -1,59 +1,91 @@
-import { WebSocketServer , WebSocket} from "ws";
+import { WebSocketServer, WebSocket } from "ws";
+
+interface ExtWebSocket extends WebSocket {
+  isAlive?: boolean;
+}
+
 interface User {
-    socket: WebSocket;
-    room: string;
-  }
+  socket: ExtWebSocket;
+  room: string;
+}
+
 export function startWsServer(port = process.env.PORT || 3001) {
-  const actualPort = typeof port === 'string' ? parseInt(port, 10) : port;
-  console.log(`Starting another WS server on port ${actualPort}`);
+  const actualPort = typeof port === "string" ? parseInt(port, 10) : port;
+  console.log(`Starting WS server on port ${actualPort}`);
   const wss = new WebSocketServer({ port: actualPort });
-  
 
   let allSockets: User[] = [];
 
-  wss.on("connection", (socket) => {
+  const removeSocket = (socket: ExtWebSocket) => {
+    allSockets = allSockets.filter((user) => user.socket !== socket);
+  };
+
+  // Heartbeat to prune dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      const extWs = ws as ExtWebSocket;
+      if (extWs.isAlive === false) {
+        removeSocket(extWs);
+        return extWs.terminate();
+      }
+      extWs.isAlive = false;
+      extWs.ping();
+    });
+  }, 30000);
+
+  wss.on("connection", (socket: ExtWebSocket) => {
+    socket.isAlive = true;
+
+    socket.on("pong", () => {
+      socket.isAlive = true;
+    });
+
     console.log("New WebSocket connection established");
-    
+
     // Handle connection close
     socket.on("close", () => {
       console.log("WebSocket connection closed");
-      allSockets = allSockets.filter(user => user.socket !== socket);
+      removeSocket(socket);
       console.log(`Active connections: ${allSockets.length}`);
     });
 
     // Handle connection errors
     socket.on("error", (error) => {
       console.error("WebSocket error:", error);
-      allSockets = allSockets.filter(user => user.socket !== socket);
+      removeSocket(socket);
     });
 
     socket.on("message", (message) => {
       try {
         const parsedMessage = JSON.parse(message.toString());
-        console.log("Received message:", parsedMessage.type);
-        
-        if (parsedMessage.type == "join") {
+        console.log("Received message type:", parsedMessage.type);
+
+        if (parsedMessage.type === "join") {
           const roomId = parsedMessage.payload?.roomId;
           if (!roomId) {
             console.error("Join message missing roomId");
             return;
           }
-          
+
           console.log(`User joined room: ${roomId}`);
-          
+
           // Remove user from any previous room
-          allSockets = allSockets.filter(user => user.socket !== socket);
-          
+          removeSocket(socket);
+
           // Add user to new room
           allSockets.push({
             socket,
             room: roomId,
           });
-          
-          console.log(`Active connections in room ${roomId}: ${allSockets.filter(u => u.room === roomId).length}`);
+
+          console.log(
+            `Active connections in room ${roomId}: ${
+              allSockets.filter((u) => u.room === roomId).length
+            }`
+          );
         }
 
-        if (parsedMessage.type == "chat") {
+        if (parsedMessage.type === "chat") {
           const user = allSockets.find((x) => x.socket === socket);
           if (!user) {
             console.error("Chat message from unknown user");
@@ -61,24 +93,45 @@ export function startWsServer(port = process.env.PORT || 3001) {
           }
 
           const currentUserRoom = user.room;
-          const roomSockets = allSockets.filter(socketObj => socketObj.room === currentUserRoom);
-          
-          console.log(`Broadcasting chat to ${roomSockets.length} users in room ${currentUserRoom}`);
-          
+          const roomSockets = allSockets.filter(
+            (socketObj) => socketObj.room === currentUserRoom
+          );
+
+          console.log(
+            `Broadcasting chat to ${roomSockets.length} users in room ${currentUserRoom}`
+          );
+
+          let chatPayload = parsedMessage.payload;
+          if (typeof chatPayload?.message === "string") {
+            try {
+              // If it was nested stringified JSON, parse it
+              const inner = JSON.parse(chatPayload.message);
+              if (typeof inner === "object" && inner !== null) {
+                chatPayload = inner;
+              }
+            } catch {
+              // plain text message, keep as is
+            }
+          }
+
+          const broadcastData = JSON.stringify({
+            type: "chat",
+            payload: chatPayload,
+          });
+
           roomSockets.forEach((socketObj) => {
             if (socketObj.socket.readyState === WebSocket.OPEN) {
               try {
-                socketObj.socket.send(parsedMessage.payload.message);
+                socketObj.socket.send(broadcastData);
               } catch (error) {
                 console.error("Error sending chat message:", error);
-                // Remove broken connection
-                allSockets = allSockets.filter(u => u.socket !== socketObj.socket);
+                removeSocket(socketObj.socket);
               }
             }
           });
         }
-        
-        if (parsedMessage.type == "stroke") {
+
+        if (parsedMessage.type === "stroke") {
           const user = allSockets.find((x) => x.socket === socket);
           if (!user) {
             console.error("Stroke message from unknown user");
@@ -86,18 +139,28 @@ export function startWsServer(port = process.env.PORT || 3001) {
           }
 
           const currentUserRoom = user.room;
-          const roomSockets = allSockets.filter(socketObj => socketObj.room === currentUserRoom);
-          
-          console.log(`Broadcasting stroke to ${roomSockets.length} users in room ${currentUserRoom}`);
-          
-          roomSockets.forEach((socketObj) => {
+          // Broadcast ONLY to other sockets in the room, NOT back to sender
+          const otherRoomSockets = allSockets.filter(
+            (socketObj) =>
+              socketObj.room === currentUserRoom && socketObj.socket !== socket
+          );
+
+          console.log(
+            `Broadcasting stroke to ${otherRoomSockets.length} other users in room ${currentUserRoom}`
+          );
+
+          const strokeBroadcastData = JSON.stringify({
+            type: "stroke",
+            payload: parsedMessage.payload,
+          });
+
+          otherRoomSockets.forEach((socketObj) => {
             if (socketObj.socket.readyState === WebSocket.OPEN) {
               try {
-                socketObj.socket.send(JSON.stringify(parsedMessage.payload));
+                socketObj.socket.send(strokeBroadcastData);
               } catch (error) {
                 console.error("Error sending stroke message:", error);
-                // Remove broken connection
-                allSockets = allSockets.filter(u => u.socket !== socketObj.socket);
+                removeSocket(socketObj.socket);
               }
             }
           });
@@ -108,20 +171,15 @@ export function startWsServer(port = process.env.PORT || 3001) {
     });
   });
 
-  // Add graceful shutdown for production
-  process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
+  const shutdown = () => {
+    console.log("Shutting down WS server gracefully");
+    clearInterval(heartbeatInterval);
     wss.close(() => {
-      console.log('WebSocket server closed');
+      console.log("WebSocket server closed");
       process.exit(0);
     });
-  });
+  };
 
-  process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
-    wss.close(() => {
-      console.log('WebSocket server closed');
-      process.exit(0);
-    });
-  });
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
