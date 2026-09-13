@@ -40,6 +40,7 @@ export const authOptions: NextAuthOptions = {
               id: existingUser.id,
               name: existingUser.name,
               email: existingUser.email,
+              image: existingUser.image || null,
             };
           }
 
@@ -59,7 +60,12 @@ export const authOptions: NextAuthOptions = {
               password: hashedPassword,
             },
           });
-          return { id: newUser.id, name: newUser.name, email: newUser.email };
+          return {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
+            image: newUser.image || null,
+          };
         } catch (error) {
           console.error('Authentication error:', error);
           return null;
@@ -68,16 +74,40 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    session: ({ session, token }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: token.uid,
-      },
-    }),
-    jwt: ({ user, token }) => {
+    session: async ({ session, token }) => {
+      let dbImage = (token.picture as string) || null;
+      let dbName = session.user?.name;
+      if (token?.uid) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.uid as string },
+            select: { image: true, name: true },
+          });
+          if (dbUser) {
+            dbImage = dbUser.image;
+            dbName = dbUser.name || dbName;
+          }
+        } catch (e) {
+          console.error("Error fetching user in session callback:", e);
+        }
+      }
+      return {
+        ...session,
+        user: {
+          ...session.user,
+          id: token.uid as string,
+          name: dbName,
+          image: dbImage,
+        },
+      };
+    },
+    jwt: async ({ user, token, trigger, session }) => {
       if (user) {
         token.uid = user.id;
+        token.picture = user.image || token.picture;
+      }
+      if (trigger === "update" && session?.image !== undefined) {
+        token.picture = session.image;
       }
       return token;
     },

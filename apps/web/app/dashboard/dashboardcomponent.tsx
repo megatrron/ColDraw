@@ -35,12 +35,15 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomDropdownOpen, setRoomDropdownOpen] = useState<string | null>(null);
   const [joinWorkspace, setJoinWorkspace] = useState(false);
+  const [profilePic, setProfilePic] = useState<string | null>(user.image || null);
+  const [uploadingPic, setUploadingPic] = useState(false);
   const router = useRouter();
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const joinworkspaceRef = useRef<HTMLDivElement | null>(null);
   const roomDropdownRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -114,6 +117,76 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
     setRoomDropdownOpen(null);
   };
 
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select a valid image file.");
+      return;
+    }
+
+    setUploadingPic(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement("canvas");
+          const size = 256;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setUploadingPic(false);
+            return;
+          }
+
+          const minDim = Math.min(img.width, img.height);
+          const sx = (img.width - minDim) / 2;
+          const sy = (img.height - minDim) / 2;
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+          try {
+            await axios.post("/user/updateprofile", { image: compressedDataUrl });
+            setProfilePic(compressedDataUrl);
+            router.refresh();
+          } catch (err) {
+            console.error("Failed to update profile picture:", err);
+            alert("Failed to update profile picture. Please try again.");
+          } finally {
+            setUploadingPic(false);
+          }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setUploadingPic(false);
+      alert("Error reading image file.");
+    }
+
+    e.target.value = "";
+  };
+
+  const handleRemoveProfilePic = async () => {
+    if (!confirm("Are you sure you want to remove your profile picture?")) return;
+    try {
+      setUploadingPic(true);
+      await axios.post("/user/updateprofile", { image: null });
+      setProfilePic(null);
+      router.refresh();
+    } catch (err) {
+      console.error("Failed to remove profile picture:", err);
+      alert("Failed to remove profile picture.");
+    } finally {
+      setUploadingPic(false);
+    }
+  };
+
   useEffect(() => {
     const fetchRooms = async () => {
       try {
@@ -180,23 +253,106 @@ export const Dashboard = ({ user }: { user: Session["user"] }) => {
           <button
             onClick={() => setOpen((prev) => !prev)}
             className="flex items-center gap-2 focus:outline-none cursor-pointer"
+            title={user.name || "User profile"}
           >
-            <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-semibold flex items-center justify-center border border-blue-200">
-              {user.name?.[0]?.toUpperCase() || "U"}
-            </div>
+            {profilePic ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profilePic}
+                alt={user.name || "User"}
+                className="w-9 h-9 rounded-full object-cover border border-gray-300 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center border border-blue-700 shadow-sm">
+                {user.name?.[0]?.toUpperCase() || "U"}
+              </div>
+            )}
           </button>
 
           {open && (
             <div
               ref={dropdownRef}
-              className="absolute right-0 mt-3 w-56 bg-white shadow-xl rounded-xl p-2 border border-gray-100 z-50 animate-in fade-in zoom-in-95 duration-100"
+              className="absolute right-0 mt-3 w-64 bg-white shadow-xl rounded-xl p-2 border border-gray-100 z-50 animate-in fade-in zoom-in-95 duration-100"
             >
-              <div className="px-3 py-2 border-b border-gray-100">
-                <p className="text-sm font-semibold text-gray-900 truncate">
-                  {user.name}
-                </p>
-                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+              <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-3">
+                {profilePic ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={profilePic}
+                    alt={user.name || "User"}
+                    className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center shrink-0">
+                    {user.name?.[0]?.toUpperCase() || "U"}
+                  </div>
+                )}
+                <div className="truncate">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {user.name}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                </div>
               </div>
+
+              {/* Profile Photo Update / Remove Options */}
+              <div className="py-1 border-b border-gray-100">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={uploadingPic}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  <span>{uploadingPic ? "Updating photo..." : "Update Profile Picture"}</span>
+                </button>
+
+                {profilePic && (
+                  <button
+                    type="button"
+                    disabled={uploadingPic}
+                    onClick={handleRemoveProfilePic}
+                    className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                    <span>Remove Custom Photo</span>
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => signOut({ callbackUrl: "/auth/login" })}
                 className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition mt-1 font-medium cursor-pointer"
