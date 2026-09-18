@@ -75,7 +75,7 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     session: async ({ session, token }) => {
-      let dbImage = (token.picture as string) || null;
+      let dbImage = null;
       let dbName = session.user?.name;
       if (token?.uid) {
         try {
@@ -101,13 +101,16 @@ export const authOptions: NextAuthOptions = {
         },
       };
     },
-    jwt: async ({ user, token, trigger, session }) => {
+    jwt: async ({ user, token }) => {
       if (user) {
         token.uid = user.id;
-        token.picture = user.image || token.picture;
-      }
-      if (trigger === "update" && session?.image !== undefined) {
-        token.picture = session.image;
+        // Never put base64 / large images into the JWT cookie to avoid 494 REQUEST_HEADER_TOO_LARGE.
+        // Only keep short external URLs (e.g. Google profile url) if needed.
+        if (user.image && !user.image.startsWith("data:")) {
+          token.picture = user.image;
+        } else {
+          delete token.picture;
+        }
       }
       return token;
     },
