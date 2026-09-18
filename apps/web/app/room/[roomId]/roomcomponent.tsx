@@ -1,23 +1,19 @@
 "use client";
 
-import axios from "axios";
+import { useEffect, useState, useRef } from "react";
+import DrawingBoard from "./drawingeditor";
 import { useParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
-import "js-draw/styles";
-import dynamic from "next/dynamic";
+import axios from "axios";
 import JitsiEmbed from "./voiceControls";
 
-type ChatMessage = {
+interface ChatMessage {
   id?: string;
-  senderId: string;
-  senderName?: string | null;
   message: string;
-  roomId: string;
-};
-
-const DrawingEditor = dynamic(() => import('./drawingeditor'), {
-  ssr: false,
-});
+  senderId?: string;
+  senderName?: string;
+  time?: string;
+  roomId?: string;
+}
 
 interface Session {
   user: {
@@ -47,37 +43,40 @@ function getWsUrl(): string {
   return `ws://${host}:3001`;
 }
 
-export default function RoomAuth({ session }: { session: Session }) {
-  if (!session) return <div>Loading...</div>;
-  if (!session.user) return <div>Invalid session</div>;
-  return <RoomComponent session={session} />;
-}
-
-function RoomComponent({ session }: { session: Session }) {
+export default function RoomComponent({ session }: { session: Session }) {
+  const params = useParams();
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const params = useParams();
 
-  // Fetch chat messages when opened
+  // Fetch initial messages
   useEffect(() => {
-    const roomId = params.roomId as string;
-    if (!chatOpen || !roomId) return;
-
-    const fetchMessages = async () => {
+    const fetchChatMessages = async () => {
       try {
-        const response = await axios.get(`/room/chats?limit=50&roomId=${roomId}`);
-        setMessages(response.data.chats || []);
-      } catch (error) {
-        console.error("Error fetching messages:", error);
+        const res = await axios.get(`/room/chats?roomId=${params.roomId}`);
+        const formattedMessages = (res.data.chats || []).map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (chat: any) => ({
+            id: chat.id,
+            message: chat.message,
+            senderId: chat.senderId,
+            senderName: chat.sender?.name || "User",
+            time: chat.time,
+            roomId: chat.roomId,
+          })
+        );
+        setMessages(formattedMessages);
+      } catch (err) {
+        console.error("Failed to fetch chats:", err);
       }
     };
 
-    fetchMessages();
-  }, [chatOpen, params.roomId]);
+    fetchChatMessages();
+  }, [params.roomId]);
 
+  // Connect WebSocket for chat
   useEffect(() => {
     let isCleanedUp = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,10 +101,37 @@ function RoomComponent({ session }: { session: Session }) {
         ws.onmessage = (event) => {
           try {
             const parsed = JSON.parse(event.data);
+            // Ignore any non-chat messages (like stroke broadcasts)
+            if (parsed.type && parsed.type !== "chat") {
+              return;
+            }
+
             if (parsed.type === "chat" && parsed.payload) {
-              const chatPayload = parsed.payload as ChatMessage;
+              const rawPayload = parsed.payload;
+              // Guard against rawPayload being an object or stroke payload
+              const text =
+                typeof rawPayload.message === "string"
+                  ? rawPayload.message
+                  : typeof rawPayload === "string"
+                  ? rawPayload
+                  : null;
+
+              if (!text) return;
+
+              const chatPayload: ChatMessage = {
+                id: rawPayload.id,
+                message: text,
+                senderId: rawPayload.senderId,
+                senderName: rawPayload.senderName,
+                time: rawPayload.time,
+                roomId: rawPayload.roomId,
+              };
               setMessages((prev) => [...prev, chatPayload]);
-            } else if (parsed.message && parsed.roomId && !parsed.type) {
+            } else if (
+              typeof parsed.message === "string" &&
+              parsed.roomId &&
+              !parsed.type
+            ) {
               setMessages((prev) => [...prev, parsed as ChatMessage]);
             }
           } catch (error) {
@@ -136,7 +162,11 @@ function RoomComponent({ session }: { session: Session }) {
     return () => {
       isCleanedUp = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      if (
+        wsRef.current &&
+        (wsRef.current.readyState === WebSocket.OPEN ||
+          wsRef.current.readyState === WebSocket.CONNECTING)
+      ) {
         wsRef.current.close();
       }
       wsRef.current = null;
@@ -148,35 +178,48 @@ function RoomComponent({ session }: { session: Session }) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
-    if (!session?.user?.id) return;
 
-    const newMessage: ChatMessage = {
-      senderId: String(session.user.id),
-      senderName: session.user.name ? String(session.user.name) : null,
+    const messageData: ChatMessage = {
       message: inputMessage.trim(),
-      roomId: String(params.roomId),
+      roomId: params.roomId as string,
+      senderId: session.user.id,
+      senderName: session.user.name || "User",
+      time: new Date().toISOString(),
     };
 
+    // Optimistically update UI
+    setMessages((prev) => [...prev, messageData]);
+    setInputMessage("");
+
+    // Send via WebSocket for live broadcast
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
           type: "chat",
-          payload: newMessage,
+          payload: messageData,
         })
       );
     }
 
-    axios.post("/room/sendmessage", newMessage).catch(console.error);
-    setInputMessage("");
+    // Persist to database
+    try {
+      await axios.post("/room/sendmessage", {
+        message: messageData.message,
+        roomId: messageData.roomId,
+      });
+    } catch (err) {
+      console.error("Failed to persist message:", err);
+    }
   };
 
   return (
-    <div>
-      <DrawingEditor userId={session.user.id} />
+    <div className="relative w-screen h-screen overflow-hidden bg-white">
+      {/* Drawing Canvas */}
+      <DrawingBoard userId={session.user.id} />
 
-      {/* Chat Toggle Button */}
+      {/* Top Controls */}
       <div
         className="fixed top-4 left-4 z-50 mt-8 rounded-full text-white bg-black p-2 w-10 h-10 flex items-center justify-center cursor-pointer shadow-md hover:bg-gray-800 transition"
         onClick={() => setChatOpen(true)}
@@ -198,14 +241,13 @@ function RoomComponent({ session }: { session: Session }) {
 
       {/* Chat Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full w-80 bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`fixed top-0 left-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${
           chatOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center bg-gray-100">
-          <h2 className="text-lg font-semibold text-gray-800">Room Chat</h2>
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+          <h2 className="text-lg font-bold text-gray-800">Room Chat</h2>
           <button
             onClick={() => setChatOpen(false)}
             className="text-gray-500 hover:text-gray-800 text-xl font-bold cursor-pointer"
@@ -223,6 +265,11 @@ function RoomComponent({ session }: { session: Session }) {
           ) : (
             messages.map((msg, index) => {
               const isMe = msg.senderId === session.user.id;
+              const textContent =
+                typeof msg.message === "string"
+                  ? msg.message
+                  : JSON.stringify(msg.message);
+
               return (
                 <div
                   key={msg.id || index}
@@ -240,7 +287,7 @@ function RoomComponent({ session }: { session: Session }) {
                         : "bg-gray-100 text-gray-800 rounded-bl-none"
                     }`}
                   >
-                    {msg.message}
+                    {textContent}
                   </div>
                 </div>
               );
@@ -258,12 +305,15 @@ function RoomComponent({ session }: { session: Session }) {
             placeholder="Type a message..."
             className="flex-1 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleSend();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSendMessage();
+              }
             }}
           />
           <button
-            onClick={handleSend}
-            className="bg-blue-600 text-white px-3 py-1.5 text-sm rounded-md hover:bg-blue-700 transition"
+            onClick={handleSendMessage}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm font-medium cursor-pointer transition"
           >
             Send
           </button>
